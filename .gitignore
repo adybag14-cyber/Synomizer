@@ -11,3 +11,6 @@ site/
 playwright-report/
 test-results/
 artifacts/
+
+artifacts/
+packages/

@@ -149,7 +149,7 @@ function download(text, name, type) {
 }
 $("#download").addEventListener("click", () => { if (latest && !busy) download(latest.result.text, "synomizer-rewrite.txt", "text/plain;charset=utf-8"); });
 $("#export-changes").addEventListener("click", () => {
-  if (latest && !busy) download(JSON.stringify({ version: "1.1.0", options: latest.options, text: latest.result.text, changes: latest.result.changes }, null, 2) + "\n", "synomizer-changes.json", "application/json");
+  if (latest && !busy) download(JSON.stringify({ version: "1.1.1", options: latest.options, text: latest.result.text, changes: latest.result.changes }, null, 2) + "\n", "synomizer-changes.json", "application/json");
 });
 $("#import").addEventListener("click", () => $("#file").click());
 $("#file").addEventListener("change", async () => {

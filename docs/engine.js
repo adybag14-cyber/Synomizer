@@ -473,6 +473,11 @@ function opaqueEnd(t, i) {
   }
   if (!isLetter(t[i]) && !digitChar(t[i])) return i;
   let end = i;
+  if (/^(?:[A-Za-z][A-Za-z0-9+.-]*:\/\/|www\.)/i.test(t.slice(i))) {
+    while (end<t.length && !spaceChar(t[end]) && !"<>\"'`".includes(t[end]) && !UNICODE_PUNCT.has(t[end])) end++;
+    while (end>i && ".,!?;:".includes(t[end-1])) end--;
+    return end;
+  }
   while (end < t.length && !spaceChar(t[end]) && !"<>\"'`()[]{}".includes(t[end]) && !UNICODE_PUNCT.has(t[end])) end++;
   const part = t.slice(i, end);
   const opaque = /[@/\\_]/.test(part) || /\.[A-Za-z0-9]/.test(part);
@@ -529,7 +534,7 @@ function splitPieces(text) {
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
     const whitespace = !token.word && !token.frozen && /^[ \t\n]+$/.test(token.text);
-    if (whitespace && !quotes.length && (!current.length || token.text.includes("\n"))) {
+    if (whitespace && !quotes.length && !current.length) {
       flush(); pieces.push({ sentence: false, text: token.text, tokens: [] }); continue;
     }
     current.push(token);
@@ -542,7 +547,7 @@ function splitPieces(text) {
     let boundary = !quotes.length && (terminal(token.text) || (closed && i > 0 && terminal(tokens[i - 1].text)));
     if (boundary && token.text === "." && i > 0 && tokens[i - 1].word) {
       const w = lower(tokens[i - 1].text);
-      if (w.length === 1 || ABBREV.has(w)) boundary = false;
+      if ((w.length === 1 && isLetter(w)) || ABBREV.has(w)) boundary = false;
     }
     if (boundary && i + 1 < tokens.length) {
       const next = tokens[i + 1];
@@ -632,7 +637,7 @@ function pushSpace(out) {
 function appendSlice(out, slice) {
   if (slice.length === 0) return;
   pushSpace(out);
-  out.push(...slice);
+  for (const token of slice) out.push(token);
 }
 
 function capFirst(slice) {
@@ -653,7 +658,7 @@ function decapFirst(resources, slice) {
   for (const token of slice) {
     if (!token.word || !token.text) continue;
     const low = lower(token.text);
-    if (low === "i" || allCaps(token.text) || !capitalized(token.text)) return;
+    if (token.frozen || low === "i" || allCaps(token.text) || !capitalized(token.text)) return;
     const ordinary = DETERMINERS.has(low) || PRONOUNS.has(low) || AUX.has(low) || PREPS.has(low) || coordinator(low) || subordinatorWord(low) || hasLemma(resources, low);
     if (!ordinary) return;
     if (isLetter(token.text[0])) token.text = lowerChar(token.text[0]) + token.text.slice(1);
@@ -662,6 +667,7 @@ function decapFirst(resources, slice) {
 }
 
 function manner(resources, token) {
+  if (token.frozen) return false;
   return analyze(resources, token.text, false).some((item) => item.pos === "adv" && item.flag === "manner" && ["quickly", "rapidly", "swiftly", "carefully", "cautiously", "quietly", "silently", "loudly", "noisily"].includes(item.lemma));
 }
 
@@ -765,6 +771,7 @@ function tryClause(resources, tokens, words) {
 }
 
 function tryAdverb(resources, tokens, words) {
+  if (tokens.filter(t => t.word && looksLikeVerb(resources,t.text) && !AUX.has(lower(t.text))).length>1) return null;
   if (words.length < 3) return null;
   const punct = punctIndex(tokens);
   const limit = punct < 0 ? tokens.length : punct;
@@ -821,13 +828,14 @@ function tryAdjectives(resources, tokens, words) {
     const swap = left.text;
     left.text = applyCaps(lower(right.text), left.text);
     right.text = applyCaps(lower(swap), right.text);
+    left.replaced = right.replaced = true;
     return finish(copy, concat(tokens), "Swapped coordinated adjectives");
   }
   return null;
 }
 
 function arrange(resources, tokens, enabled) {
-  const scope = new Set("not never no neither nor only just hardly scarcely barely if unless whether that which who whom whose where why how while to".split(" "));
+  const scope = new Set("not never no neither nor only just hardly scarcely barely if unless whether that which who whom whose where why how while to without can could may might must shall should will would cannot say says said tell tells told know knows knew think thinks thought believe believes believed wonder wonders wondered very too so quite rather almost nearly less more least most enough especially particularly".split(" "));
   let subordinators = 0, commas = 0, thirdPerson = false;
   for (const token of tokens) {
     const w = lower(token.text);
@@ -962,6 +970,12 @@ function verbFrame(resources, analysis, tokens, words, slot, prev) {
   }
   const next = atSlot(tokens, words, slot + 1);
   if (PARTICLES.has(next)) return false;
+  if (['remember','recall'].includes(lemma) && next==='to') return false;
+  if (['find','locate'].includes(lemma)) {
+    const after=(next==='it' || OBJECTS.has(next)) ? slot+2 : npEnd(resources,tokens,words,slot+1);
+    const complement=atSlot(tokens,words,after);
+    if (knownAdjective(resources,complement) || AUX.has(complement) || looksLikeVerb(resources,complement)) return false;
+  }
   if (secondNp(resources, tokens, words, slot)) return false;
   if ((lemma === "help" || lemma === "assist" || lemma === "aid") && bareVerbAfterNp(resources, tokens, words, slot)) return false;
   if ((lemma === "happen" || lemma === "occur") && next === "to") return false;
@@ -1118,6 +1132,8 @@ function substitute(resources, tokens, options, ordinal) {
     if (!row) continue;
     const usable = [];
     for (const synonym of row.synonyms) {
+      if (chosen.pos==='adj' && next==='to' && ['likely','unlikely','probable','improbable','eager','enthusiastic'].includes(chosen.lemma)) continue;
+      if (chosen.pos==='adj' && (DETERMINERS.has(prev) || knownNoun(resources,next)) && ['afraid','aware','unwell'].includes(synonym)) continue;
       if (chosen.pos === "adj" && next === "to" && ["happy", "glad", "pleased", "joyful", "cheerful"].includes(chosen.lemma) && !["happy", "glad", "pleased"].includes(synonym)) continue;
       const inflected = inflect(synonym, chosen.pos, chosen.features);
       if (inflected) usable.push(inflected);
@@ -1211,7 +1227,7 @@ export function rewrite(input, options = {}, resources) {
     const substituted = substitute(resources, tokens, settings, ordinal);
     ordinal = substituted.next;
     fixArticles(substituted.tokens, substituted.changes);
-    result.changes.push(...substituted.changes);
+    for (const change of substituted.changes) result.changes.push(change);
     for (const token of substituted.tokens) {
       result.parts.push({ text: token.text, changed: token.replaced });
     }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.1 — 2026-10-07
+
+- Reconciled supplemental hardening with the concurrently merged 1.1.0 implementation; retained protected terms, cancellable workers, the documented newline contract, and the complete existing validation suite.
+- Guarded degree-adverb scope, line-wrapped clauses, infinitive and object-complement frames, predicative-only adjectives, and protected-name capitalization during rearrangement.
+- Fixed a/an after coordinated-adjective movement and preserved parentheses in plain URLs.
+- Added supplementary deterministic, native/browser, native sanitizer, long-document and real-browser regression coverage.
+- Added installable versioned CLI ZIP packages and static MinGW linking.
+- Fingerprinted all deployed assets; Pages now publishes the exact browser-tested artifact and verifies the live commit and hashes after deployment.
+
 ## 1.1.0 — 2026-10-07
 
 ### Rewriting safety

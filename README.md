@@ -32,12 +32,13 @@ cmake --build build --config Release --parallel 2
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-The executable is `build/synomizer` on a single-configuration Unix build, `build/synomizer.exe` with MinGW/Ninja on Windows, or `build/Release/synomizer.exe` with Visual Studio. The CI workflow builds on Linux, Windows and macOS, and uploads native executables with the licence and documentation as workflow artifacts. Windows MSVC builds use the static C++ runtime.
+The executable is `build/synomizer` on a single-configuration Unix build, `build/synomizer.exe` with MinGW/Ninja on Windows, or `build/Release/synomizer.exe` with Visual Studio. The CI workflow builds on Linux, Windows and macOS, and uploads native executables with the licence and documentation as workflow artifacts. Windows MSVC and MinGW packages use a static C++ runtime. Versioned installable ZIP packages are also retained as `packages-*` workflow artifacts and can be published through GitHub Releases.
 
 Optional installation:
 
 ```sh
 cmake --install build --config Release --prefix ./install
+cpack --config build/CPackConfig.cmake -C Release -G ZIP -B packages
 ```
 
 The native executable embeds the lexicon and phrase list and does not need a network connection or external dictionary files at runtime. Changing either data file automatically triggers CMake to reconfigure on the next build.
@@ -88,6 +89,8 @@ No filename, or `-`, reads stdin. Files and text are UTF-8. CRLF and standalone 
 
 Substitutions are selected using a deterministic 64-bit hash. The engine checks local part-of-speech cues, grammatical frames, verb tense, participles, plural forms, supported comparative/superlative forms, capitalization, and adjacent `a`/`an` articles. Grammar decisions use the original sentence context, not already substituted words. A limited set of clause, manner-adverb and coordinated-adjective moves supplies structural variation.
 
+Additional frame checks retain `likely to leave`, `remembered to help` and the verb in `found it difficult`. Degree modifiers are not detached from their adverbs, line-wrapped clauses are not treated as independent sentences, and adjective movement updates a/an when necessary.
+
 Some examples:
 
 | Input | Behaviour |
@@ -110,7 +113,7 @@ Sentence moves are skipped for uncertain negation/focus scope, embedded clauses,
 
 ## Sample
 
-The 97-word passage in `examples/sample.txt`, at seed 1 and standard intensity in version 1.1.0:
+The 97-word passage in `examples/sample.txt`, at seed 1 and standard intensity in version 1.1.1:
 
 > The cautious instructor assisted the cheerful youngsters. The class commenced the project late because the weather was chilly. She quietly clarified the primary concept, and the learners were happy to help. They bought a little automobile for the school journey and swiftly located the correct route. The tranquil doctor said the weary lad was healthy. The group stayed joyful although the trip was long. The author described the ultimate outcome in a truthful report. When the assembly ended, the throng was hushed. The local learners located a helpful reply and stayed tranquil. It was a little triumph.
 
@@ -154,7 +157,7 @@ npm run test:web
 
 Playwright starts and stops its own local server, tests the real `/Synomizer/` deployment subpath across Chromium, Firefox, WebKit and mobile Chromium, and records screenshots and failure traces. To test an already-deployed site instead, set `PLAYWRIGHT_BASE_URL` to its URL with a trailing slash. Do not run a separate development server on port 4178 during local Playwright tests.
 
-GitHub Pages deployment is gated on the native matrix, sanitizer checks and browser tests. `scripts/build-site.mjs` packages the page, Web Worker and the same data files into `site/`; `version.json` records the deployed source commit. GitHub's Pages source must be configured as **GitHub Actions**, not branch publishing.
+GitHub Pages deployment is gated on the native matrix, sanitizer checks and browser tests. `scripts/build-site.mjs` packages the page, Web Worker and the same data files into `site/`; `version.json` and `build.json` record the release version, source commit and SHA-256 hashes of all nine deployed assets, including the license. Pages deploys the exact artifact tested by the browser suite, then checks the live commit and asset hashes. GitHub's Pages source must be configured as **GitHub Actions**, not branch publishing.
 
 ## Contributing and licence
 
