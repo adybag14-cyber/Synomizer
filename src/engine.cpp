@@ -7,7 +7,8 @@
 
 namespace synomizer {
 
-static_assert(__cplusplus >= 202302L, "Synomizer is built as C++23");
+// GCC 13 reports 202100L for -std=c++23. GCC 14 and later report 202302L.
+static_assert(__cplusplus >= 202100L, "Synomizer is built as C++23");
 
 std::string_view version() noexcept {
   return SYNOMIZER_VERSION;
