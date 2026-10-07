@@ -10,6 +10,12 @@ test('shared lexical rules have valid, unambiguous schemas',()=>{
     const cols=line.split('\t');assert.equal(cols.length,4,`row ${index+1}`);
     const [name,pos,members,flag]=cols;
     const words=members.split('|');assert.equal(new Set(words).size,words.length,`duplicate alternative row ${index+1}`);
+    if(name==='@academic') {
+      assert.ok(['review','pending','dependent','verbal','support','benchmark','nominal','route','local'].includes(pos));
+      assert.ok(['1','2'].includes(flag));assert.ok(words.length>=2);
+      for(const word of words)assert.match(word,/^[a-z]+(?: [a-z]+)*$/);
+      const key=`academic/${words[0]}`;assert.ok(!seen.has(key));seen.add(key);continue;
+    }
     if(name==='@phrase'){
       assert.ok(['front','connector','purpose'].includes(pos));assert.ok(words.length>=2);
       for(const word of words)assert.match(word,/^[a-z]+(?: [a-z]+)*$/);

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 const SAMPLE = "The careful teacher helped the happy children. Because the weather was cold, the class started the project late. She quietly explained the main idea, and the students were glad to assist. They purchased a small car for the school trip and quickly found the correct route. The calm physician said the tired boy was healthy. Although the journey was long, the group remained cheerful. The writer described the final result in an honest report. The crowd was silent when the meeting ended. The local students found a useful answer and remained calm. It was a small victory.";
 
-const VERSION = "1.2.1";
+const VERSION = "1.3.0";
 const $ = (selector) => document.querySelector(selector);
 const source = $("#source"), status = $("#status"), banner = $("#banner");
 const changes = $("#changes"), seed = $("#seed"), intensity = $("#intensity"), grid = $("#variations");

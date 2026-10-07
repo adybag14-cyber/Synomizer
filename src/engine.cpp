@@ -41,13 +41,20 @@ Result rewrite(std::string_view input, const Options& options) {
     std::vector<Token> tokens = std::move(piece.tokens);
     freeze_tokens(tokens, settings.protect_quotes, settings.style == Style::Recast && settings.synonyms && settings.intensity > 0);
     const bool locked = freeze_terms(tokens, settings.protected_terms);
+    bool academic_moved = false;
     if (!locked) {
+      if (auto moved = academic_arrangement(tokens, settings)) {
+        tokens = std::move(moved->tokens);
+        result.changes.push_back(std::move(moved->change));
+        academic_moved = true;
+      }
+      academic_phrases(tokens, settings, result.changes);
       auto adjuncts = rephrase(tokens, settings, ordinal);
       result.changes.insert(result.changes.end(), adjuncts.begin(), adjuncts.end());
       vary_phrases(tokens, settings, result.changes);
     }
     if (settings.style == Style::Recast) protect_remaining_phrases(tokens);
-    if (std::optional<ArrangeOutcome> arranged = arrange_sentence(tokens, settings.arrange && !locked && settings.style != Style::Close, settings.style == Style::Recast, settings.seed)) {
+    if (std::optional<ArrangeOutcome> arranged = arrange_sentence(tokens, settings.arrange && !locked && !academic_moved && settings.style != Style::Close, settings.style == Style::Recast, settings.seed)) {
       tokens = std::move(arranged->tokens);
       result.changes.push_back(std::move(arranged->change));
     }

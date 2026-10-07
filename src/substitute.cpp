@@ -227,6 +227,9 @@ bool verb_frame(const Analysis& analysis, const std::vector<Token>& tokens, cons
   if (is_particle(next)) {
     return false;
   }
+  // Infinitival complements do not transfer between these verb senses.
+  if ((lemma == "remain" || lemma == "stay") && next == "to") return false;
+  if ((lemma == "examine" || lemma == "inspect") && (next == "whether" || next == "how" || next == "that")) return false;
   if ((lemma == "suggest" || lemma == "propose") && next == "to") return false;
   if ((lemma == "try" || lemma == "attempt") && next != "to" &&
       !(next.ends_with("ing") && looks_like_verb_token(next))) return false;
@@ -666,6 +669,8 @@ SubstituteOutcome substitute(std::vector<Token> tokens, const Options& options, 
     }
     if (chosen.flag == "disagreement" && chosen.lemma != "quarrel" &&
         prev != "heated" && prev != "bitter" && prev != "verbal" && prev != "petty" && prev != "protracted") continue;
+    // Significant may denote a statistical/quantitative claim, not importance.
+    if (chosen.pos == Pos::Adj && chosen.lemma == "significant") continue;
     if (!context_allows(chosen, context, words, slot)) continue;
     if (chosen.lemma == "however" && (static_cast<std::size_t>(words[static_cast<std::size_t>(slot)] + 1) >= outcome.tokens.size() || outcome.tokens[static_cast<std::size_t>(words[static_cast<std::size_t>(slot)] + 1)].text != ",")) continue;
     if (chosen.pos == Pos::Adv && (chosen.lemma == "nearly" || chosen.lemma == "almost") && (next == "no" || next == "not" || next == "never")) continue;
@@ -697,6 +702,7 @@ SubstituteOutcome substitute(std::vector<Token> tokens, const Options& options, 
     }
     std::vector<std::string> usable;
     for (const std::string& synonym : *synonyms) {
+      if (chosen.pos == Pos::Adj && synonym == "significant") continue;
       if (chosen.pos == Pos::Adj && (synonym == "afraid" || synonym == "aware" || synonym == "unwell") &&
           !be_form(cue) && cue != "seem" && cue != "seems" && cue != "seemed" && cue != "feel" && cue != "feels" &&
           cue != "felt" && cue != "remain" && cue != "remained" && cue != "stay" && cue != "stayed") continue;

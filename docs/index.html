@@ -22,7 +22,7 @@
     <form class="tools" id="tools">
       <label>Seed <input id="seed" name="seed" type="text" inputmode="numeric" value="1" autocomplete="off" spellcheck="false"></label>
       <label>Intensity
-        <select id="intensity" name="intensity">
+        <select id="intensity" name="intensity" title="Vocabulary breadth, not a minimum number of changes. Use Restructured for eligible sentence-level variations.">
           <option value="0">0 · adjectives and manner</option>
           <option value="1" selected>1 · standard</option>
           <option value="2">2 · also narrower words</option>
@@ -51,7 +51,7 @@
     <p class="status" id="status" role="status">Loading the word lists…</p>
     <p class="banner" id="banner" role="alert" hidden></p>
 
-    <p class="hint" id="editor-help">English text · Up to 200,000 characters · Ctrl/Cmd + Enter to rewrite · Your original is never replaced by a variation.</p>
+    <p class="hint" id="editor-help">English text · Up to 200,000 characters · Ctrl/Cmd + Enter to rewrite · Your original is never replaced by a variation. Choose Restructured for eligible academic phrase and sentence changes.</p>
     <section class="original-sheet">
       <div class="sheet-head"><h2>Original</h2><p id="source-count"></p></div>
       <textarea id="source" spellcheck="true" aria-label="Original text" aria-describedby="editor-help" placeholder="Paste your English text here..."></textarea>
@@ -119,7 +119,7 @@
 
   <footer class="colophon">
     <p>Review before using. Mechanical rewriting cannot guarantee identical meaning or perfect grammar. The C++23 command-line tool is the reference. This page runs the same rules in the browser. It is not a language model, and it does not claim a perfect paraphrase: metaphor, register, and the emphasis of a moved clause can still shift.</p>
-    <p>Version 1.2.1 · Apache-2.0 · Text and settings stay in memory and are not saved after a reload. This site uses no third-party fonts, analytics, or rewriting services.</p>
+    <p>Version 1.3.0 · Apache-2.0 · Text and settings stay in memory and are not saved after a reload. This site uses no third-party fonts, analytics, or rewriting services.</p>
     <p><a href="https://github.com/adybag14-cyber/Synomizer">adybag14-cyber/Synomizer</a></p>
   </footer>
   <noscript><p class="banner">Synomizer needs JavaScript for the live rewrite.</p></noscript>

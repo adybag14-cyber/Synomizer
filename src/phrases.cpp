@@ -10,14 +10,17 @@ void vary_phrases(std::vector<Token>& tokens, const Options& options, std::vecto
     const auto word = lower_copy(token.text);
     if (word == "not" || word == "never" || word == "no" || word.find("n't") != std::string::npos) return;
   }
+  // Compute a sentence-wide guard once, not once per token. The table never
+  // introduces or removes these verb tokens; generated spans are opaque.
+  const bool purpose_blocked = std::ranges::any_of(tokens, [](const Token& t) {
+    const auto w=lower_copy(t.text);
+    return w=="put" || w=="set" || w=="get" || w=="got" || w=="keep" || w=="kept" || w=="bring" || w=="brought" || w=="arrange" || w=="arranged";
+  });
   for (std::size_t start = 0; start < tokens.size(); ++start) {
     if (!tokens[start].word || tokens[start].frozen) continue;
     bool replaced = false;
     for (const auto& rule : lexicon().phrase_rules) {
-      if (rule.mode == "purpose" && std::ranges::any_of(tokens, [](const Token& t) {
-        const auto w=lower_copy(t.text);
-        return w=="put" || w=="set" || w=="get" || w=="got" || w=="keep" || w=="kept" || w=="bring" || w=="brought" || w=="arrange" || w=="arranged";
-      })) continue;
+      if (rule.mode == "purpose" && purpose_blocked) continue;
       for (std::size_t form = 0; form < rule.forms.size(); ++form) {
         if (rule.mode == "purpose" && form != 0) continue; // Never expand complement 'to'.
         std::string match;

@@ -157,6 +157,7 @@ function keyOf(lemma, pos) {
 export function loadResources(lexiconTsv, phrasesText, rephrasesTsv = "") {
   const rows = new Map();
   const phraseRules = [];
+  const academicRules = [];
   const byLemma = new Map();
   const add = (lemma, pos, synonyms, flag) => {
     const clean = synonyms.filter((syn) => syn && syn !== lemma);
@@ -172,6 +173,13 @@ export function loadResources(lexiconTsv, phrasesText, rephrasesTsv = "") {
     const cols = line.split("\t").map((part) => part.trim());
     if (cols.length < 3) continue;
     const flag = cols[3] || "free";
+    if (cols[0] === "@academic") {
+      const modes = ["review", "pending", "dependent", "verbal", "support", "benchmark", "nominal", "route", "local"];
+      const forms = cols[2].split("|");
+      if (cols.length !== 4 || !modes.includes(cols[1]) || !["1", "2"].includes(cols[3]) || forms.length < 2 ||
+          forms.some((form) => !/^[a-z]+(?: [a-z]+)*$/.test(form))) throw new TypeError("Invalid academic phrase rule.");
+      academicRules.push({ mode: cols[1], forms, minimumIntensity: Number(cols[3]) }); continue;
+    }
     if (cols[0] === "@phrase") { phraseRules.push({ mode: cols[1], forms: cols[2].split("|") }); continue; }
     if (cols[0] === "@group") {
       const members = cols[2].split("|").map((part) => part.trim()).filter(Boolean);
@@ -204,7 +212,14 @@ export function loadResources(lexiconTsv, phrasesText, rephrasesTsv = "") {
     if (!source || !target || (!["tail", "edge"].includes(position) || !["0", "1"].includes(minimum))) throw new TypeError("Invalid phrase rule.");
     return { source: source.split(" "), target, tailOnly: position === "tail", minimumIntensity: Number(minimum) };
   }).sort((a, b) => b.source.length - a.source.length);
-  return { rows, byLemma, phrases, phraseRules, phraseIndex, fixedPhraseIndex, rephrases };
+  const academicIndex = new Map();
+  for (const rule of academicRules) {
+    rule.source = rule.forms[0].split(" ");
+    if (!academicIndex.has(rule.source[0])) academicIndex.set(rule.source[0], []);
+    academicIndex.get(rule.source[0]).push(rule);
+  }
+  for (const rules of academicIndex.values()) rules.sort((a, b) => b.source.length - a.source.length);
+  return { rows, byLemma, phrases, phraseRules, phraseIndex, fixedPhraseIndex, rephrases, academicRules, academicIndex };
 }
 
 function findRow(resources, lemma, pos) {
@@ -1020,6 +1035,8 @@ function verbFrame(resources, analysis, tokens, words, slot, prev) {
   }
   const next = atSlot(tokens, words, slot + 1);
   if (PARTICLES.has(next)) return false;
+  if (["remain", "stay"].includes(lemma) && next === "to") return false;
+  if (["examine", "inspect"].includes(lemma) && ["whether", "how", "that"].includes(next)) return false;
   if (["suggest", "propose"].includes(lemma) && next === "to") return false;
   if (["try", "attempt"].includes(lemma) && next !== "to" && !(next.endsWith("ing") && looksLikeVerb(resources, next))) return false;
   if (lemma === "decline" && (!next || PREPS.has(next) || knownAdverb(resources, next)) && next !== "to") return false;
@@ -1253,6 +1270,7 @@ function substitute(resources, tokens, options, ordinal) {
     if (chosen.pos === "adj" && chosen.lemma === "little" &&
       (["money", "cash", "time", "water", "food", "milk", "evidence", "information", "patience", "help", "assistance", "attention", "hope"].includes(next) || knownAdjective(resources, next) || knownAdverb(resources, next))) continue;
     if (chosen.flag === "disagreement" && chosen.lemma !== "quarrel" && !["heated", "bitter", "verbal", "petty", "protracted"].includes(prev)) continue;
+    if (chosen.pos === "adj" && chosen.lemma === "significant") continue;
     if (!contextAllows(resources, chosen, context, words, slot)) continue;
     if (chosen.lemma === "however" && tokens[words[slot] + 1]?.text !== ",") continue;
     if (chosen.pos === "adv" && ["nearly", "almost"].includes(chosen.lemma) && ["no", "not", "never"].includes(next)) continue;
@@ -1269,6 +1287,7 @@ function substitute(resources, tokens, options, ordinal) {
     if (!row) continue;
     const usable = [];
     for (const synonym of row.synonyms) {
+      if (chosen.pos === "adj" && synonym === "significant") continue;
       if (chosen.pos === "adj" && ["afraid", "aware", "unwell"].includes(synonym) &&
         !BE.has(cue) && !["seem", "seems", "seemed", "feel", "feels", "felt", "remain", "remained", "stay", "stayed"].includes(cue)) continue;
 
@@ -1365,12 +1384,16 @@ export function rewrite(input, options = {}, resources) {
     freezePhrases(resources, tokens, settings.style === "recast" && settings.synonyms && settings.intensity > 0);
     freezeNames(resources, tokens);
     const locked = freezeTerms(tokens, options.protectedTerms || []);
+    let academicMoved = false;
     if (!locked) {
+      const moved = academicArrangement(resources, tokens, settings);
+      if (moved) { tokens = moved.tokens; result.changes.push(moved.change); academicMoved = true; }
+      academicPhrases(resources, tokens, settings, result.changes);
       for (const change of rephrase(resources, tokens, settings, ordinal)) result.changes.push(change);
       varyPhrases(resources, tokens, settings, result.changes);
     }
     if (settings.style === "recast") freezePhrases(resources, tokens);
-    const arranged = arrange(resources, tokens, settings.arrange && !locked && settings.style !== "close", settings.style === "recast", settings.seed);
+    const arranged = arrange(resources, tokens, settings.arrange && !locked && !academicMoved && settings.style !== "close", settings.style === "recast", settings.seed);
     if (arranged) {
       tokens = arranged.tokens;
       result.changes.push(arranged.change);
@@ -1391,11 +1414,12 @@ export function rewrite(input, options = {}, resources) {
 function varyPhrases(resources, tokens, options, changes) {
   if (!options.synonyms || options.style !== "recast" || options.intensity < 1) return;
   if (tokens.some((t) => ["not", "never", "no"].includes(lower(t.text)) || lower(t.text).includes("n't"))) return;
+  const purposeBlocked = tokens.some(t => ["put","set","get","got","keep","kept","bring","brought","arrange","arranged"].includes(lower(t.text)));
   for (let start = 0; start < tokens.length; start++) {
     if (!tokens[start].word || tokens[start].frozen) continue;
     let replaced = false;
     for (const rule of resources.phraseRules || []) {
-      if (rule.mode === "purpose" && tokens.some((t) => ["put","set","get","got","keep","kept","bring","brought","arrange","arranged"].includes(lower(t.text)))) continue;
+      if (rule.mode === "purpose" && purposeBlocked) continue;
       for (let form = 0; form < rule.forms.length; form++) {
         if (rule.mode === "purpose" && form !== 0) continue;
         let match = "", end = start;
@@ -1449,6 +1473,7 @@ export function rewriteVariants(input, options = {}, resources, count = 3) {
   const original = rewrite(input, { ...options, synonyms: false, arrange: false }, resources).text;
   const batch = { variants: [], requested: count, attempts: 0 };
   const profileBudget = original.split(/[ \t\r\n]+/).filter(Boolean).length > 2000 ? 1 : 4;
+  const originalFingerprint = fingerprint(original);
   const selected = [];
   const generate = (style, offset) => {
     const seed = String((BigInt(options.seed ?? 1) + BigInt(offset)) & MASK);
@@ -1466,7 +1491,7 @@ export function rewriteVariants(input, options = {}, resources, count = 3) {
       const candidate = generate(profile === 1 ? "close" : "recast", profile + attempt * 3);
       if (!unique(candidate)) continue;
       const fp = fingerprint(candidate.result.text);
-      let score = 1000;
+      let score = wordingDistance(fp, originalFingerprint);
       for (const other of selected) score = Math.min(score, wordingDistance(fp, other));
       if (score > bestDistance) { bestDistance = score; best = candidate; }
     }
@@ -1565,6 +1590,178 @@ function tryNounSubjectAdverb(resources, tokens, words, seed) {
     } else { rebuilt = body; appendSlice(rebuilt, [adverb]); }
     if (punct >= 0) rebuilt.push({ ...tokens[punct] });
     return finish(rebuilt, concat(tokens), "Moved a pre-verbal manner adverb");
+  }
+  return null;
+}
+
+// Guarded academic phrases and syntax. Keep the four transforms aligned with
+// src/academic.cpp; these are local templates, not a general semantic parser.
+function academicSpace(t) { return !t.word && t.text.length > 0 && !/[^ \t]/.test(t.text); }
+function academicWord(t, i) { return i >= 0 && i < t.length && t[i].word ? lower(t[i].text) : ""; }
+function academicSlice(t, a, b) {
+  while (a < b && academicSpace(t[a])) a++;
+  while (b > a && academicSpace(t[b-1])) b--;
+  return t.slice(a, b).map(t => ({ ...t }));
+}
+function academicLiteral(text) {
+  const out = [];
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    if (out.length) out.push({ text: " ", word: false, frozen: false, replaced: false });
+    out.push({ text: word, word: true, frozen: true, replaced: true });
+  }
+  return out;
+}
+function academicAppend(out, tail) {
+  if (!tail.length) return;
+  if (out.length) out.push({ text: " ", word: false, frozen: false, replaced: false });
+  for (const token of tail) out.push({ ...token });
+}
+function academicCap(t) { if (t.length && t[0].text.length) t[0].text = upperChar(t[0].text[0])+t[0].text.slice(1); }
+function academicDecap(t, knownCommon = false) {
+  if (!t.length || !t[0].text.length) return;
+  const w = lower(t[0].text);
+  if (w === "i" || allCaps(t[0].text)) return;
+  if (knownCommon || DETERMINERS.has(w) || ["recent","published","experimental","mechanistic","comparative","current","further","additional"].includes(w))
+    t[0].text = lowerChar(t[0].text[0])+t[0].text.slice(1);
+}
+function academicUnsafe(t) {
+  return t.some(token => {
+    const w = lower(token.text);
+    return ["not","never","no","neither","nor","only","just","hardly","scarcely","barely"].includes(w) || w.includes("n't") || w.includes("\n") ||
+      (!token.word && token.frozen && !token.replaced) || ['"',"'","?","!","\u2018","\u2019","\u201c","\u201d"].includes(w);
+  });
+}
+function academicGuard(resources, r, t, begin, end) {
+  const prev = begin >= 2 && academicSpace(t[begin-1]) ? academicWord(t, begin-2) : "";
+  const next = end+1 < t.length && academicSpace(t[end]) ? academicWord(t, end+1) : "";
+  if (r.mode === "local") return true;
+  if (r.mode === "review") return ["review","study","analysis","report","paper","investigation","survey","evaluation","assessment"].includes(prev) && !!next;
+  if (r.mode === "pending") return !!prev && !AUX.has(prev) && !PRONOUNS.has(prev) && !PREPS.has(prev) && !DETERMINERS.has(prev) &&
+    ["established","determined","resolved","verified","confirmed","evaluated","assessed","identified","clarified","explained","demonstrated","shown","seen","known","done","understood","measured","quantified","characterised","characterized","validated","defined","tested"].includes(next);
+  if (r.mode === "dependent") return !!prev && !AUX.has(prev) && !PREPS.has(prev) && !DETERMINERS.has(prev) && !!next;
+  if (r.mode === "verbal") {
+    if (r.source[1] === "control" && !["transfer","test","testing","measurement","evaluation","assessment","experiment","experiments","protocol","protocols","analysis","reaction","reactions","procedure","procedures","method","methods","synthesis","process","processes","operation"].includes(prev)) return false;
+    return !!prev && !DETERMINERS.has(prev) && (!["of","for"].includes(r.source.at(-1)) || !!next);
+  }
+  if (r.mode === "support") {
+    if (!next || PREPS.has(next) || AUX.has(next)) return false;
+    for (let k = begin, n = 0; k >= 2 && n < 5; k -= 2, n++) {
+      if (!academicSpace(t[k-1])) return false;
+      const w = academicWord(t, k-2);
+      if (["studies","results","findings","evidence","data","analyses","analysis","research","review","study","experiments","simulations"].includes(w)) return true;
+      if (!AUX.has(w) && !knownAdverb(resources, w)) break;
+    }
+    return false;
+  }
+  if (r.mode === "benchmark") {
+    if (!["research","chemistry","study","studies","results","evidence","analysis","analyses","comparison","comparisons","work","experiment","experiments","simulation","simulations"].includes(prev) || !["a","the"].includes(next)) return false;
+    for (let k = end+1, n = 0; k < t.length && n < 6; k += 2, n++) {
+      const w = academicWord(t, k);
+      if (w === "benchmark") {
+        const after = k+1 < t.length && academicSpace(t[k+1]) ? academicWord(t,k+2) : "";
+        return !after || PREPS.has(after) || AUX.has(after) || coordinator(after);
+      }
+      if (!w || PREPS.has(w) || AUX.has(w) || k+1 >= t.length || !academicSpace(t[k+1])) break;
+    }
+    return false;
+  }
+  if (r.mode === "nominal") return !next || PREPS.has(next) || AUX.has(next) || coordinator(next) || ["that","which"].includes(next) || looksLikeVerb(resources, next);
+  if (r.mode === "route") {
+    if (!["offers","offer","provides","provide"].includes(prev)) return false;
+    for (let k = end+1, n = 0; k < t.length && n < 8; k += 2, n++) {
+      const w = academicWord(t, k);
+      if (["structure","structures","compound","compounds","molecule","molecules","product","products","material","materials"].includes(w)) return true;
+      if (!w || (w.endsWith("ing") && !w.includes("-")) || PREPS.has(w) || AUX.has(w) || k+1 >= t.length || !academicSpace(t[k+1])) break;
+    }
+  }
+  return false;
+}
+function academicPhrases(resources, tokens, options, changes) {
+  if (!options.synonyms || options.style === "close" || options.intensity < 1 || academicUnsafe(tokens)) return;
+  const output = [];
+  for (let i = 0; i < tokens.length;) {
+    let replaced = false;
+    if (tokens[i].word && !tokens[i].frozen) {
+      for (const r of resources.academicIndex?.get(lower(tokens[i].text)) || []) {
+        const length = r.source.length*2-1;
+        if (options.intensity < r.minimumIntensity || length > tokens.length-i) continue;
+        let matches = true;
+        for (let k=0;k<length;k++) {
+          const t=tokens[i+k];
+          if (t.frozen || (k%2 ? t.text!==" " : !t.word || lower(t.text)!==r.source[k/2])) { matches=false;break; }
+        }
+        if (!matches || !academicGuard(resources,r,tokens,i,i+length)) continue;
+        const before=concat(academicSlice(tokens,i,i+length)),targets=r.forms.slice(1);
+        const pick=Number(((BigInt(options.seed)+BigInt(i)) & MASK) % BigInt(targets.length));
+        const after=applyCaps(targets[pick],tokens[i].text);
+        changes.push({kind:"phrase",before,after,detail:`Guarded academic ${r.mode} phrase`});
+        for (const t of academicLiteral(after)) output.push(t);
+        i+=length;replaced=true;break;
+      }
+    }
+    if (!replaced) output.push(tokens[i++]);
+  }
+  tokens.length=0;for (const t of output) tokens.push(t);
+}
+function academicHas(t, a, b, words) { return t.slice(a,b).some(t => t.word && words.includes(lower(t.text))); }
+function academicPredicate(resources, t, a, b) {
+  return t.slice(a,b).some(t => t.word && (looksLikeVerb(resources, t.text) || ["requires","require","depends","depend","exists","exist","works","contains","contain","increases","increase","decreases","decrease","occurs","occur"].includes(lower(t.text))));
+}
+function academicDone(tokens, before, detail) { return finish(tokens, concat(before), detail); }
+function academicArrangement(resources, tokens, options) {
+  if (!options.arrange || options.style !== "recast" || options.intensity < 1 || tokens.length < 7 || academicUnsafe(tokens)) return null;
+  if (tokens[tokens.length-1].text !== ".") return null;
+  const end = tokens.length-1;
+  let thats=0,whiles=0,linksCount=0;
+  for (const t of tokens) {
+    const w=lower(t.text);thats+=Number(w==="that");whiles+=Number(w==="while");
+    linksCount+=Number(["therefore","consequently","however","nevertheless","nonetheless"].includes(w));
+  }
+  if (thats>1 || whiles>1 || linksCount>1) return null;
+  if (tokens.slice(0,end).some(t => !t.word && t.text !== " " && t.text !== ",")) return null;
+  if (academicHas(tokens,0,end,["if","unless","whether","because","although","though","when","where","who","which","whose","but"])) return null;
+  const punctuation = text => ({ text, word: false, frozen: false, replaced: false });
+  const sources = ["full-text comparison","the comparison","this comparison","the analysis","this analysis","the results","these results","the findings","these findings","the evidence","this evidence","the data","these data","experimental results","experimental evidence","the simulations","this review"];
+  const reporting = { shows:"shown", show:"shown", demonstrates:"demonstrated", demonstrate:"demonstrated", indicates:"indicated", indicate:"indicated", suggests:"suggested", suggest:"suggested" };
+  for (let i = 2; i+4 < end && i <= 12; i++) {
+    const key = academicWord(tokens,i), part = Object.hasOwn(reporting,key) ? reporting[key] : null;
+    if (!part || academicWord(tokens,i+2) !== "that" || tokens[i-1].text !== " " || tokens[i+1].text !== " " || tokens[i+3].text !== " ") continue;
+    const source = academicSlice(tokens,0,i);
+    if (!sources.includes(lower(concat(source))) || academicHas(tokens,i+4,end,["that","while"]) || !academicPredicate(resources,tokens,i+4,end)) continue;
+    const body = academicSlice(tokens,i+4,end); academicCap(body); academicDecap(source,true);
+    body.push(punctuation(",")); academicAppend(body,academicLiteral(`as ${part} by`)); academicAppend(body,source); body.push({ ...tokens[end] });
+    return academicDone(body,tokens,"Moved evidence attribution after its complete claim");
+  }
+  const participles = ["illustrating","highlighting","demonstrating","showing","retaining","preserving","maintaining","avoiding","reducing","increasing","broadening","expanding"];
+  const matrix = ["broaden","broadens","expand","expands","extend","extends","improve","improves","provide","provides","offer","offers"];
+  for (let i = 4; i+4 < end; i++) {
+    if (academicWord(tokens,i) !== "while" || !participles.includes(academicWord(tokens,i+2)) || academicHas(tokens,0,end,["that"])) continue;
+    let verbs = 0, simple = true;
+    for (let k=0;k<i;k++) { if (matrix.includes(academicWord(tokens,k))) verbs++; if (tokens[k].text === "," || AUX.has(academicWord(tokens,k))) simple=false; }
+    if (!simple || verbs !== 1 || academicHas(tokens,i+2,end,["while"])) continue;
+    const intro=academicSlice(tokens,i,end), body=academicSlice(tokens,0,i); academicCap(intro); academicDecap(body);
+    intro.push(punctuation(",")); academicAppend(intro,body); intro.push({ ...tokens[end] });
+    return academicDone(intro,tokens,"Fronted a same-subject while-participle adjunct");
+  }
+  for (let i=4;i+2<end;i++) {
+    const w=academicWord(tokens,i), prev=academicWord(tokens,i-2);
+    if (!["therefore","consequently","however","nevertheless","nonetheless"].includes(w) || !["is","are","was","were"].includes(prev) || academicHas(tokens,0,end,["that","while"])) continue;
+    if (tokens.slice(0,i).some(t=>t.text===",")) continue;
+    const body=academicSlice(tokens,0,i); academicAppend(body,academicSlice(tokens,i+1,end)); academicDecap(body);
+    const out=academicLiteral(w); academicCap(out); out.push(punctuation(",")); academicAppend(out,body); out.push({ ...tokens[end] });
+    return academicDone(out,tokens,"Fronted a discourse connective without changing the proposition");
+  }
+  const heads=["assessment","approach","framework","procedure","strategy","plan","protocol","method","workflow","system","model","design","scheme"];
+  if (["a","an"].includes(academicWord(tokens,0))) {
+    for (let i=4;i+6<end && i<=12;i++) {
+      if (academicWord(tokens,i)!=="is" || !heads.includes(academicWord(tokens,i-2)) || !["proposed","suggested","recommended"].includes(academicWord(tokens,i+2)) ||
+          academicWord(tokens,i+4)!=="that" || !["combines","integrates","includes","uses","incorporates","addresses"].includes(academicWord(tokens,i+6)) || academicHas(tokens,i+6,end,["that","while"])) continue;
+      if (tokens.slice(0,i).some(t=>t.text===",")) continue;
+      const out=academicSlice(tokens,0,i); academicAppend(out,academicSlice(tokens,i+4,end));
+      const proposal=academicSlice(tokens,i,i+3); for (const t of proposal) if (t.word) t.frozen=true;
+      academicAppend(out,proposal); out.push({ ...tokens[end] });
+      return academicDone(out,tokens,"Placed a proposed method's relative clause beside its noun");
+    }
   }
   return null;
 }
