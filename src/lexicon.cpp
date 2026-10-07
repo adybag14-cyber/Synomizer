@@ -80,6 +80,11 @@ void load_line(Lexicon& lex, std::string_view line) {
     return;
   }
   const std::string flag = cols.size() >= 4 && !cols[3].empty() ? cols[3] : "free";
+  if (cols[0] == "@academic") {
+    if (cols.size() == 4 && (cols[3] == "1" || cols[3] == "2"))
+      lex.academic_rules.push_back({cols[1], split_char(cols[2], '|'), cols[3] == "2" ? 2 : 1});
+    return;
+  }
   if (cols[0] == "@phrase") {
     lex.phrase_rules.push_back({cols[1], split_char(cols[2], '|')});
     return;

@@ -62,6 +62,7 @@ Variants rewrite_variants(std::string_view input, const Options& options, std::s
     inside = word;
   }
   const std::uint64_t profile_budget = spans > 2000 ? 1 : 4;
+  const auto original_fingerprint = fingerprint(original);
   std::vector<Fingerprint> selected;
   auto generate = [&](Style style, std::uint64_t offset) {
     auto settings = options;
@@ -88,7 +89,9 @@ Variants rewrite_variants(std::string_view input, const Options& options, std::s
       auto candidate = generate(profile == 1 ? Style::Close : Style::Recast, static_cast<std::uint64_t>(profile) + attempt * 3);
       if (!unique(candidate)) continue;
       const auto fp = fingerprint(candidate.result.text);
-      int score = 1000;
+      // Diversity from selected outputs alone rewards near-copies of the
+      // original. Include the source so trivial edits do not win that way.
+      int score = distance(fp, original_fingerprint);
       for (const auto& other : selected) score = std::min(score, distance(fp, other));
       if (score > best_distance) { best_distance = score; best = std::move(candidate); }
     }

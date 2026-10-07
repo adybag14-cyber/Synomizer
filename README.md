@@ -117,7 +117,7 @@ Sentence moves are skipped for uncertain negation/focus scope, embedded clauses,
 
 ## Sample
 
-The 97-word passage in `examples/sample.txt`, at seed 1 and standard intensity in version 1.2.1:
+The 97-word passage in `examples/sample.txt`, at seed 1 and standard intensity in version 1.3.0:
 
 > The cautious instructor assisted the cheerful youngsters. The class commenced the project late because the weather was chilly. She quietly clarified the primary concept, and the learners were happy to help. They bought a little automobile for the school journey and swiftly located the correct route. The tranquil doctor said the weary lad was healthy. The group stayed joyful although the trip was long. The author described the ultimate outcome in a truthful report. When the assembly ended, the throng was hushed. The local learners located a helpful reply and stayed tranquil. It was a little triumph.
 
@@ -137,7 +137,7 @@ All cards now display **complete text**, not truncated previews. Use a card's co
 
 Long results remain complete in a scrollable card. Above 50,000 characters, inline highlighting is omitted to avoid excessive rendering work; complete change records remain available. The on-screen ledger starts with 250 changes and can display more, while all exports contain the full ledger. Invalid/obsolete requests disable every export rather than leaving old alternatives available.
 
-Every candidate is generated from the **original**, not by repeatedly rewriting a previous paraphrase. The first candidate uses the base seed with Balanced rules. For later profiles a bounded search chooses wording that differs from the already-selected options, using word/bigram overlap. This is a diversity heuristic, **not** a meaning-preservation or quality score. Multi-result searches try at most 12 candidate rewrites and may return fewer than requested. Above 2,000 whitespace-separated spans, the search tries one candidate per profile first (at most six total with duplicate fallbacks), avoiding repeated full-document passes while keeping all three approaches. Duplicate rewrites are omitted; an unrewritable passage is shown unchanged. Intensity, disabled operations, quote protection and protected terms are never relaxed to fill a quota. The batch uses its three profiles even when a single-pass style was supplied.
+Every candidate is generated from the **original**, not by repeatedly rewriting a previous paraphrase. The first candidate uses the base seed with Balanced rules. For later profiles a bounded search chooses wording that differs from the already-selected options, using word/bigram overlap against both the original and the already-selected outputs. Including the original avoids rewarding a near-copy simply because it differs from another candidate. This is a diversity heuristic, **not** a meaning-preservation or quality score. Multi-result searches try at most 12 candidate rewrites and may return fewer than requested. Above 2,000 whitespace-separated spans, the search tries one candidate per profile first (at most six total with duplicate fallbacks), avoiding repeated full-document passes while keeping all three approaches. Duplicate rewrites are omitted; an unrewritable passage is shown unchanged. Intensity, disabled operations, quote protection and protected terms are never relaxed to fill a quota. The batch uses its three profiles even when a single-pass style was supplied.
 
 ```sh
 # Three labelled alternatives, or structured results for an application
@@ -165,6 +165,27 @@ Recast also recognizes supported simple noun-subject clauses: with synonyms disa
 Additional grammar guards preserve the frames in `helped the child learn`, `proposed to leave`, and `tried the soup`; distinguish product recalls and intransitive sales declines; prevent nominal `a cold` or quantity `little money` from being treated as ordinary adjective substitutions; and distinguish a logical argument from a quarrel. Noun/verb cues prevent `students question` becoming `students inquiry`. Ambiguous command verbs such as `Answer the question`, `Film the event` and `Ship the tool` are preserved rather than rewritten using noun senses. Event-object rules permit `finished the project` → `completed the project` while retaining `finished the soup`.
 
 Audited comparative targets can use **more cheerful** / **most cheerful** rather than invalid suffix forms. Newly used irregular verbs retain **kept**, **shown** and their other forms; plural **aircraft** is not written as `aircrafts`. Contextual number cues distinguish `The aircraft were ready.` → `The airplanes were prepared.` from `An aircraft was ready.` → `An airplane was prepared.`; ambiguous or conflicting number cues preserve `aircraft`. A hash-indexed native lexicon avoids scanning every row for each lookup. These are local grammatical/context rules, not general language understanding; review every candidate.
+
+## Academic prose: phrase and sentence coverage
+
+Version 1.3.0 adds a dedicated academic-prose pass instead of attempting to solve sparse coverage by replacing more technical nouns. **Balanced** uses eligible word and academic-phrase edits; **Restructured** can additionally change supported sentence arrangements; **Light touch** deliberately retains its selective word-only behaviour.
+
+The shared lexicon contains 27 `@academic` rows. Each row records a grammatical guard, a source followed by one or more targets, and its minimum intensity. These are directional phrase rules, not unrestricted synonym groups. For example, `This review examines whether` can become `This review assesses whether`; supported pending-work statements can use `has yet to be`; and `A research opportunity` can become `An opportunity for research`, including the article correction.
+
+Supported Restructured templates include:
+
+| Original | Structural alternative, with synonyms disabled |
+| --- | --- |
+| The results suggest that the model may fail. | The model may fail, as suggested by the results. |
+| Recent methods broaden the comparison while preserving uncertainty. | While preserving uncertainty, recent methods broaden the comparison. |
+| The algorithm is therefore a candidate for further testing. | Therefore, the algorithm is a candidate for further testing. |
+| A verification strategy is proposed that includes boundary cases. | A verification strategy that includes boundary cases is proposed. |
+
+These are guarded templates, not unrestricted active/passive conversion. New phrase rules skip negation/focus and protected spans; structural rules also skip nested/ambiguous clauses, multiline layouts and incompatible punctuation. Reference names and technical tokens move intact. `Significant` is retained rather than replaced with `important`; `remains to be established` cannot become `stays to be established`; `examines whether` cannot become `inspects whether`.
+
+All rules operate on an immutable token context and their output is protected from further lexical editing in the same pass. Sentence templates preserve their reporting/proposal predicates and do not add evidence, new scientific conclusions, or stronger certainty markers. Nevertheless, changed phrasing and emphasis still require editorial review: these checks are not a proof of semantic equivalence.
+
+Intensity is vocabulary breadth, **not** a minimum percentage of replaced words. Technical passages may retain many words even when several clauses are genuinely rearranged. Review the separate phrase and move counts in each card's ledger rather than judging variation only by the number of synonym substitutions. `tests/fixtures/academic-prose.txt` is a reusable synthetic fixture; it is not a published research claim.
 
 ## Library API
 

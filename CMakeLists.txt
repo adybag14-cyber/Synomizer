@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Synomizer VERSION 1.2.1 LANGUAGES CXX)
+project(Synomizer VERSION 1.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -49,6 +49,7 @@ add_library(synomizer-lib STATIC
   src/variants.cpp
   src/phrases.cpp
   src/adjuncts.cpp
+  src/academic.cpp
 )
 target_include_directories(synomizer-lib
   PUBLIC include
@@ -111,3 +112,15 @@ if(MINGW)
   target_link_options(synomizer-variant-tests PRIVATE -static -static-libgcc -static-libstdc++)
 endif()
 add_test(NAME variants COMMAND synomizer-variant-tests)
+
+add_executable(synomizer-academic-tests tests/test_academic.cpp)
+target_link_libraries(synomizer-academic-tests PRIVATE synomizer-lib)
+if(MSVC)
+  target_compile_options(synomizer-academic-tests PRIVATE /W4 /permissive- /Zc:__cplusplus /EHsc /utf-8)
+else()
+  target_compile_options(synomizer-academic-tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+if(MINGW)
+  target_link_options(synomizer-academic-tests PRIVATE -static -static-libgcc -static-libstdc++)
+endif()
+add_test(NAME academic COMMAND synomizer-academic-tests)

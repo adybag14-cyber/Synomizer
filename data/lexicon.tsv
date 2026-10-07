@@ -283,3 +283,33 @@ usage	noun	use	free
 @group	noun	assumption|supposition	free
 @group	verb	finish|complete	event
 @group	verb	postpone|defer	event
+
+# Guarded academic phrases: @academic, grammatical guard, source|targets, minimum intensity.
+# Directional, longest-first; no technical names, epistemic verbs or modals are invented.
+@academic	review	examines whether|assesses whether|considers whether	1
+@academic	review	examines how|assesses how|considers how	1
+@academic	review	examined whether|assessed whether|considered whether	1
+@academic	review	examined how|assessed how|considered how	1
+@academic	pending	remains to be|has yet to be	1
+@academic	pending	remain to be|have yet to be	1
+@academic	pending	remained to be|had yet to be	1
+@academic	dependent	depends on|is dependent on	1
+@academic	verbal	requires control of|requires controlling	1
+@academic	verbal	require control of|require controlling	1
+@academic	verbal	provide substantial alternatives|offer substantial alternatives	1
+@academic	verbal	provides substantial alternatives|offers substantial alternatives	1
+@academic	verbal	provide evidence for|offer evidence for	1
+@academic	verbal	provides evidence for|offers evidence for	1
+@academic	support	support|provide support for|lend support to	1
+@academic	support	supports|provides support for|lends support to	1
+@academic	benchmark	provides|serves as	1
+@academic	benchmark	provide|serve as	1
+@academic	nominal	research opportunity|opportunity for research	1
+@academic	nominal	research opportunities|opportunities for research	1
+@academic	route	a practical route to|a practical way to access|a practical means of accessing	1
+@academic	local	the present project|this project	1
+@academic	local	the present study|this study	1
+@academic	local	the present review|this review	1
+@academic	local	the present analysis|this analysis	1
+@academic	local	as compared with|in comparison with	1
+@academic	local	with respect to|in relation to	1

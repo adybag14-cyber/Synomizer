@@ -151,6 +151,8 @@ class Lexicon {
   [[nodiscard]] const std::vector<std::vector<std::string>>& phrases_starting(std::string_view first, bool allow_variation) const;
   struct PhraseRule { std::string mode; std::vector<std::string> forms; };
   std::vector<PhraseRule> phrase_rules;
+  struct AcademicRule { std::string mode; std::vector<std::string> forms; int minimum_intensity = 1; };
+  std::vector<AcademicRule> academic_rules;
 
   void add(Analysis entry, std::vector<std::string> synonyms);
   void add_phrase(std::vector<std::string> phrase);
@@ -198,6 +200,8 @@ struct ArrangeOutcome {
 [[nodiscard]] std::optional<ArrangeOutcome> arrange_sentence(const std::vector<Token>& tokens, bool enabled, bool extended = false, std::uint64_t seed = 1);
 void vary_phrases(std::vector<Token>& tokens, const Options& options, std::vector<Change>& changes);
 void protect_remaining_phrases(std::vector<Token>& tokens);
+void academic_phrases(std::vector<Token>& tokens, const Options& options, std::vector<Change>& changes);
+[[nodiscard]] std::optional<ArrangeOutcome> academic_arrangement(const std::vector<Token>& tokens, const Options& options);
 
 [[nodiscard]] bool freeze_terms(std::vector<Token>& tokens, const std::vector<std::string>& terms);
 

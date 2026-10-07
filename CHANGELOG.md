@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0 - 2026-10-07
+
+- Score candidate diversity against the original as well as the other choices, avoiding selection of a near-copy merely because it is far from a more substantial rewrite. Search budgets and grammatical/protection restrictions are unchanged.
+
+- Add 27 directional, context-guarded academic phrase rules in the shared lexicon, with longest-first indexing and immutable-context, streaming replacement. Balanced and Restructured can use these rules at intensity 1 or 2; Light touch remains word-only.
+- Add four conservative Restructured sentence templates: evidential attribution placement, same-subject `while` participles, copular discourse connectives, and extraposed relative clauses describing proposed methods. Preserve the reporting verb's strength and the proposal predicate.
+- Block `remain` / `stay` exchange before infinitival `to`, and `examine` / `inspect` exchange before `whether`, `how` and `that`. Keep `significant` instead of treating statistical/quantitative significance as importance.
+- Restrict benchmark, pending-work, route and control phrases using grammatical/object/subject cues; leave negation, focus, quotation content, protected terms, multiline structures and uncertain nested clauses alone.
+- Bound structural scans for repeated clause markers and avoid repeated vector insertions in the academic phrase pass. Generated phrasing is not rewritten again in the same pass.
+- Add independent phrase, structure, qualifier, negative-context, native stress, long-input, native/browser parity and real-browser academic-prose regression tests. User-provided unpublished drafts used for local verification are not committed as fixtures.
+- Explain that intensity controls vocabulary breadth, not a replacement quota. Keep all three complete cards, independent exports, original-text replay and existing CI/deployment gates.
+
+
 ## 1.2.1 - 2026-10-07
 
 - Preserve ambiguous command verbs (`Answer the question`, `Film the event`, `Ship the tool`) rather than substituting noun senses; retain substitutions in explicit noun frames. Add independent native/browser checks for every candidate and profile.
