@@ -1244,8 +1244,9 @@ function substitute(resources, tokens, options, ordinal) {
       chosen.features.plural = plural;
     }
     if (chosen.pos === "noun" && ["question", "answer", "picture", "film", "shop", "store", "ship", "cause", "lie", "part", "tool", "border"].includes(chosen.lemma)) {
-      const nounCue = slot === 0 || DETERMINERS.has(prev) || PREPS.has(prev) || knownAdjective(resources, prev) ||
-        prev.endsWith("'s") || prev.endsWith("s'") || AUX.has(next) || looksLikeVerb(resources, next);
+      // Commands such as "Answer the question" and "Lie to ..." have no noun cue.
+      const nounCue = DETERMINERS.has(prev) || PREPS.has(prev) || knownAdjective(resources, prev) ||
+        prev.endsWith("'s") || prev.endsWith("s'") || (next !== "to" && looksLikeVerb(resources, next));
       if (!nounCue) continue;
     }
     if (chosen.pos === "adj" && DETERMINERS.has(prev) && (!next || PREPS.has(next) || looksLikeVerb(resources, next))) continue;

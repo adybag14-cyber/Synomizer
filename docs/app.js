@@ -11,6 +11,7 @@ const PROFILE_NAMES = { balanced: "Balanced", close: "Light touch", recast: "Res
 const MAX = 200_000, MAX_SEED = (1n << 64n) - 1n;
 let worker, ready = false, busy = false, revision = 0, running = null, pending = false;
 let timer, deadline, latest = null, ledgerLimit = 250;
+let importRevision = 0; // A newer file choice supersedes every older pending read.
 const wordCount = (text) => (text.match(/\S+/g) || []).length;
 const escapeHtml = (text) => text.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
 function current(index = latest?.selected) {
@@ -234,15 +235,15 @@ grid.addEventListener("click", (event) => {
 $("#import").addEventListener("click", () => $("#file").click());
 $("#file").addEventListener("change", async () => {
   const file = $("#file").files[0]; if (!file) return;
-  const requestRevision = revision;
+  const requestRevision = revision, importId = ++importRevision;
   try {
     if (file.size > MAX * 4) throw new Error("The selected file is too large. Use the C++ tool for longer files.");
     const text = new TextDecoder("utf-8", { fatal: true }).decode(await file.arrayBuffer());
     if (text.length > MAX) throw new Error("Use at most 200,000 characters in the browser.");
-    if (revision !== requestRevision) return;
+    if (revision !== requestRevision || importId !== importRevision) return;
     source.value = text; requestRewrite();
-  } catch (error) { if (revision === requestRevision) { banner.hidden = false; banner.textContent = `Could not import file: ${error.message}`; } }
-  finally { $("#file").value = ""; }
+  } catch (error) { if (revision === requestRevision && importId === importRevision) { banner.hidden = false; banner.textContent = `Could not import file: ${error.message}`; } }
+  finally { if (importId === importRevision) $("#file").value = ""; }
 });
 $("#more-changes").addEventListener("click", () => { ledgerLimit += 250; renderLedger(); });
 source.addEventListener("keydown", (event) => { if ((event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); requestRewrite(); } });

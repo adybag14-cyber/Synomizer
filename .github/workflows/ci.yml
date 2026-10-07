@@ -16,6 +16,7 @@ concurrency:
 jobs:
   native:
     name: Native / ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -69,6 +70,7 @@ jobs:
 
   sanitizer:
     name: Address and undefined-behaviour sanitizers
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -88,7 +90,8 @@ jobs:
 
   browser:
     name: Browser / Chromium, Firefox, WebKit, mobile
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
@@ -96,9 +99,32 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Install test browsers
-        run: npx playwright install --with-deps chromium firefox webkit
+        timeout-minutes: 3
+      - name: Bound package-manager networking and use the official HTTPS mirror
+        timeout-minutes: 1
+        run: |
+          # PR #5 stalled in apt update against the Azure HTTP mirror. Limit
+          # network retries on this ephemeral runner; never bypass signatures.
+          sudo tee /etc/apt/apt.conf.d/80-synomizer-network >/dev/null <<'EOF'
+          Acquire::Retries "2";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          DPkg::Lock::Timeout "60";
+          EOF
+          for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+            [ -f "$source" ] || continue
+            sudo sed -i -E 's#https?://azure\.archive\.ubuntu\.com/ubuntu#https://archive.ubuntu.com/ubuntu#g' "$source"
+          done
+      - name: Install browser system dependencies
+        timeout-minutes: 6
+        run: node node_modules/playwright/cli.js install-deps chromium firefox webkit
+      - name: Download pinned test browsers
+        timeout-minutes: 6
+        env:
+          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "60000"
+        run: node node_modules/playwright/cli.js install chromium firefox webkit
       - name: End-to-end editor tests under the Pages subpath
+        timeout-minutes: 8
         run: npm run test:web
       - uses: actions/upload-artifact@v4
         if: always()
@@ -117,6 +143,7 @@ jobs:
 
   pages:
     name: Deploy verified site
+    timeout-minutes: 10
     needs: [native, sanitizer, browser]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -146,12 +173,13 @@ jobs:
             let success = false;
             for (let attempt = 0; attempt < 12; attempt++) {
               try {
-                const response = await fetch(new URL('build.json' + bust, base));
+                const signal = AbortSignal.timeout(20000);
+                const response = await fetch(new URL('build.json' + bust, base), { signal });
                 if (!response.ok) throw new Error(`build.json: ${response.status}`);
                 const build = await response.json();
                 if (build.commit !== context.sha) throw new Error(`Deployment still serves ${build.commit}`);
                 for (const [file, hash] of Object.entries(build.sha256)) {
-                  const asset = await fetch(new URL(file + bust, base));
+                  const asset = await fetch(new URL(file + bust, base), { signal });
                   if (!asset.ok) throw new Error(`${file}: ${asset.status}`);
                   const actual = crypto.createHash('sha256').update(Buffer.from(await asset.arrayBuffer())).digest('hex');
                   if (actual !== hash) throw new Error(`${file}: hash mismatch`);

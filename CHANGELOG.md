@@ -2,6 +2,10 @@
 
 ## 1.2.1 - 2026-10-07
 
+- Preserve ambiguous command verbs (`Answer the question`, `Film the event`, `Ship the tool`) rather than substituting noun senses; retain substitutions in explicit noun frames. Add independent native/browser checks for every candidate and profile.
+- Resolve overlapping file imports by the latest file choice, not whichever read finishes first. Controlled browser regressions cover both completion orders.
+- Unblock browser CI after an Ubuntu mirror stall: use the official HTTPS mirror on the ephemeral runner and add bounded package/network, test and deployment timeouts without skipping any validation gate.
+
 - Reconcile the parallel three-result implementation with merged 1.2.0, preserving `Style`, `rewrite_variants`, `--variants`, `--style`, audited head/object contexts, phrase indexes, transition rules and existing regression coverage.
 - Show complete text in all three simultaneous cards; provide independent copy/text/JSON downloads and selection-specific full ledgers. Add complete reproduction options to downloaded results while retaining the batch export keys.
 - Strengthen obsolete-worker cancellation and all-card stale-export protection. Bound long-text highlight/ledger rendering without truncating result text or exported changes.

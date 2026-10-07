@@ -650,8 +650,10 @@ SubstituteOutcome substitute(std::vector<Token> tokens, const Options& options, 
     static const std::unordered_set<std::string_view> noun_verbs = {
       "question", "answer", "picture", "film", "shop", "store", "ship", "cause", "lie", "part", "tool", "border"};
     if (chosen.pos == Pos::Noun && noun_verbs.contains(chosen.lemma)) {
-      const bool noun_cue = slot == 0 || is_determiner(prev) || is_preposition(prev) || known_adjective(prev) ||
-        prev.ends_with("'s") || prev.ends_with("s'") || is_aux(next) || looks_like_verb_token(next);
+      // Sentence-initial position alone does not establish a noun: "Answer
+      // the question" is a command. Nor does the preposition in "Lie to ...".
+      const bool noun_cue = is_determiner(prev) || is_preposition(prev) || known_adjective(prev) ||
+        prev.ends_with("'s") || prev.ends_with("s'") || (next != "to" && looks_like_verb_token(next));
       if (!noun_cue) continue;
     }
     // Nominal "a cold" / "a fake" is not an attributive adjective.

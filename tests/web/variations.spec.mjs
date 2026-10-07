@@ -232,3 +232,41 @@ test("choosing and exporting each long result retains complete logs with bounded
     expect(report.changes.length).toBeGreaterThan(500);
   }
 });
+
+// Exercise real file-input events with controllable reads: no timing assumptions.
+for (const olderFirst of [true, false]) test(`latest import wins when ${olderFirst ? "older" : "newer"} read completes first`, async ({ page }) => {
+  await loaded(page);
+  const original = await page.locator("#source").inputValue();
+  await page.evaluate(() => {
+    window.__pendingImports = {};
+    File.prototype.arrayBuffer = function () {
+      return new Promise((resolve) => {
+        window.__pendingImports[this.name] = (text) => resolve(new TextEncoder().encode(text).buffer);
+      });
+    };
+  });
+  for (const name of ["older.txt", "newer.txt"]) {
+    await page.locator("#file").setInputFiles({ name, mimeType: "text/plain", buffer: Buffer.from(name) });
+  }
+  const older = "An older xyzzy passage.", newer = "A newer xyzzy passage.";
+  const settleRead = async (name, text) => page.evaluate(async ({ name, text }) => {
+    window.__pendingImports[name](text);
+    // Flush the file listener continuation before inspecting the input.
+    await Promise.resolve();
+    await Promise.resolve();
+  }, { name, text });
+  if (olderFirst) {
+    await settleRead("older.txt", older);
+    await expect(page.locator("#source")).toHaveValue(original);
+    await settleRead("newer.txt", newer);
+  } else {
+    await settleRead("newer.txt", newer);
+    await expect(page.locator("#source")).toHaveValue(newer);
+    await settleRead("older.txt", older);
+  }
+  await expect(page.locator("#source")).toHaveValue(newer);
+  await expect(page.locator("#export-all")).toBeEnabled();
+  const report = await exportBatch(page);
+  expect(report.original).toBe(newer);
+  for (const variant of report.variants) expect(variant.text).not.toContain("older");
+});
