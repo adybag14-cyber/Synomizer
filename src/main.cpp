@@ -26,6 +26,7 @@ const char* kind_name(synomizer::ChangeKind kind) {
   switch (kind) {
     case synomizer::ChangeKind::Arrangement: return "arrangement";
     case synomizer::ChangeKind::Article: return "article";
+    case synomizer::ChangeKind::Phrase: return "phrase";
     default: return "synonym";
   }
 }
@@ -50,6 +51,8 @@ Options:
       --vary-quotes      Allow word changes in quotations (never move their structure)
       --show-changes     Print each change on stderr
       --json            Output text and structured change records as JSON
+      --variants N      Offer 1..3 distinct rewrites (default 1; no duplicates)
+      --style NAME      Single-rewrite profile: balanced, close, or recast
       --text TEXT       Rewrite TEXT instead of a file or stdin
   -o, --output FILE     Write output to FILE
       --                End options; allow a filename beginning with '-'
@@ -83,9 +86,9 @@ std::string json_string(std::string_view value) {
   }
   return out + '"';
 }
-std::string to_json(const synomizer::Result& result, std::uint64_t seed) {
+std::string to_json(const synomizer::Result& result, std::uint64_t seed, synomizer::Style style) {
   std::string out = "{\"version\":" + json_string(synomizer::version()) + ",\"seed\":" + json_string(std::to_string(seed)) +
-    ",\"text\":" + json_string(result.text) + ",\"changes\":[";
+    ",\"style\":" + json_string(synomizer::style_name(style)) + ",\"text\":" + json_string(result.text) + ",\"changes\":[";
   bool first = true;
   for (const auto& change : result.changes) {
     if (!first) out += ',';
@@ -97,6 +100,7 @@ std::string to_json(const synomizer::Result& result, std::uint64_t seed) {
 }
 int run(const std::vector<std::string>& args) {
   synomizer::Options options;
+  std::size_t count = 1;
   bool show_changes=false, json=false, have_text=false, have_file=false, positional=false;
   std::string input_path, output_path, inline_text, mode;
   for (std::size_t i=1; i<args.size(); ++i) {
@@ -113,6 +117,19 @@ int run(const std::vector<std::string>& args) {
       if (arg=="--json") { json=true; continue; }
       if (arg=="--vary-quotes") { options.protect_quotes=false; continue; }
       if (arg=="--seed" || arg=="-s") { options.seed=number(value(),"seed"); continue; }
+      if (arg=="--variants") {
+        const auto n=number(value(),"variants");
+        if (n<1 || n>3) throw std::runtime_error("variants must be 1, 2, or 3");
+        count=static_cast<std::size_t>(n); continue;
+      }
+      if (arg=="--style") {
+        const auto name=value();
+        if (name=="balanced") options.style=synomizer::Style::Balanced;
+        else if (name=="close") options.style=synomizer::Style::Close;
+        else if (name=="recast") options.style=synomizer::Style::Recast;
+        else throw std::runtime_error("style must be balanced, close, or recast");
+        continue;
+      }
       if (arg=="--intensity" || arg=="-i") {
         const auto n=number(value(),"intensity");
         if (n>2) throw std::runtime_error("intensity must be 0, 1, or 2");
@@ -160,10 +177,29 @@ int run(const std::vector<std::string>& args) {
     if (stream->bad()) throw std::runtime_error("input read failed");
     input=buffer.str();
   }
-  const auto result=synomizer::rewrite(input,options);
-  if (show_changes) for (const auto& c:result.changes)
-    std::cerr << '[' << kind_name(c.kind) << "] " << c.before << " => " << c.after << " (" << c.detail << ")\n";
-  const auto rendered=json ? to_json(result,options.seed) : result.text;
+  const auto batch=synomizer::rewrite_variants(input,options,count);
+  std::string rendered;
+  if (json && count>1) rendered="{\"version\":"+json_string(synomizer::version())+",\"seed\":"+json_string(std::to_string(options.seed))+
+    ",\"requested\":"+std::to_string(batch.requested)+",\"attempts\":"+std::to_string(batch.attempts)+",\"variants\":[";
+  for (std::size_t i=0; i<batch.variants.size(); ++i) {
+    const auto& variant=batch.variants[i];
+    if (show_changes) {
+      if (count>1) std::cerr << "Variation " << i+1 << " / " << synomizer::style_name(variant.style) << " / seed " << variant.seed << '\n';
+      for (const auto& c:variant.result.changes)
+        std::cerr << '[' << kind_name(c.kind) << "] " << c.before << " => " << c.after << " (" << c.detail << ")\n";
+    }
+    if (json) {
+      if (i) rendered+=',';
+      rendered+=to_json(variant.result,variant.seed,variant.style);
+    } else {
+      if (count>1) rendered+="=== Variation "+std::to_string(i+1)+" / "+std::string(synomizer::style_name(variant.style))+" / seed "+std::to_string(variant.seed)+" ===\n";
+      rendered+=variant.result.text;
+      if (count>1) rendered+="\n\n";
+    }
+  }
+  if (json && count>1) rendered+="]}\n";
+  if (count>1 && batch.variants.size()<count && !json)
+    std::cerr << "synomizer: only " << batch.variants.size() << " distinct result(s) found; protection settings were not relaxed.\n";
   if (output_path.empty()) {
     std::cout << rendered;
     std::cout.flush();

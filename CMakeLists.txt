@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Synomizer VERSION 1.1.1 LANGUAGES CXX)
+project(Synomizer VERSION 1.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -40,6 +40,8 @@ add_library(synomizer-lib STATIC
   src/arrange.cpp
   src/substitute.cpp
   src/engine.cpp
+  src/variants.cpp
+  src/phrases.cpp
 )
 target_include_directories(synomizer-lib
   PUBLIC include
@@ -90,3 +92,15 @@ set(CPACK_PACKAGE_FILE_NAME "Synomizer-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-$
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
 set(CPACK_GENERATOR "ZIP;TGZ")
 include(CPack)
+
+add_executable(synomizer-variant-tests tests/test_variants.cpp)
+target_link_libraries(synomizer-variant-tests PRIVATE synomizer-lib)
+if(MSVC)
+  target_compile_options(synomizer-variant-tests PRIVATE /W4 /permissive- /Zc:__cplusplus /EHsc /utf-8)
+else()
+  target_compile_options(synomizer-variant-tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+if(MINGW)
+  target_link_options(synomizer-variant-tests PRIVATE -static -static-libgcc -static-libstdc++)
+endif()
+add_test(NAME variants COMMAND synomizer-variant-tests)

@@ -6,7 +6,9 @@ Keep the C++ reference engine and JavaScript browser port behaviourally identica
 
 `data/lexicon.tsv` contains four tab-separated columns: lemma (or `@group`), part of speech (`noun`, `verb`, `adj`, `adv`), pipe-separated synonyms/members, and a flag (`free`, `careful`, `manner`, `mass`, `quant`, `time`). A group expands in both directions; this is only appropriate when **every** member fits the supported context. A thesaurus relationship alone is not enough. Use directed rows, narrower context rules, or no substitution when senses or grammatical frames differ.
 
-`free` means eligible at standard intensity, not universally safe. `careful` is eligible only at intensity 2. `manner` entries may be candidates for the separately guarded adverb moves. `mass`, `quant` and `time` have additional grammatical restrictions.
+`free` means eligible at standard intensity, not universally safe. `careful` is eligible only at intensity 2. `manner` entries may be candidates for the separately guarded adverb moves. `mass`, `quant` and `time` have additional grammatical restrictions. `head:noun|noun` restricts an adjective to explicit adjacent noun heads; `object:noun|noun` restricts a verb to a recognized object head. Include positive and near-miss contexts rather than broadening these lists without evidence.
+
+`@phrase` rows use `front`, `connector` or `purpose` in column two and pipe-separated forms in column three. They are opt-in through Recast mode and have additional position, protection and scope checks. Purpose rules are deliberately one-way. A lexical rule is not a licence to rewrite an idiom containing the same words.
 
 `data/phrases.txt` contains one protected fixed expression per line. Blank lines and `#` comments are ignored. Use lowercase English phrases. User-provided protected terms are separate from this curated list.
 
@@ -14,7 +16,7 @@ Only contribute original or appropriately licensed data. Do not scrape and copy 
 
 ## Regression requirements
 
-Add a positive example and a near-miss/negative example for each rule. Test unchanged quotations, names, numbers, punctuation and whitespace as applicable. An output matching in both engines is not proof of correctness: include an independent expected result or protected-span assertion. Test multiple seeds and all relevant modes.
+Add a positive example and a near-miss/negative example for each rule. Test unchanged quotations, names, numbers, punctuation and whitespace as applicable. An output matching in both engines is not proof of correctness: include an independent expected result or protected-span assertion. Test multiple seeds, all relevant modes, every returned variant, and reproduction from its recorded seed/profile. Do not treat lexical diversity as a quality or semantic-equivalence score.
 
 Build the native tool, run CTest and `npm test`, then `npm ci` and `npm run test:web` for UI changes (install Playwright browsers first). CI also checks native platforms and sanitizers. Do not loosen an assertion merely to accept an ungrammatical or meaning-changing rewrite.
 

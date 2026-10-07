@@ -18,6 +18,8 @@ struct VerbForms {
 };
 
 constexpr VerbForms k_verbs[] = {
+    {"keep", "keeps", "kept", "kept", "keeping"},
+    {"show", "shows", "showed", "shown", "showing"},
     {"buy", "buys", "bought", "bought", "buying"},
     {"find", "finds", "found", "found", "finding"},
     {"eat", "eats", "ate", "eaten", "eating"},
@@ -35,6 +37,7 @@ struct NounForms {
 };
 
 constexpr NounForms k_nouns[] = {
+    {"aircraft", "aircraft"},
     {"child", "children"}, {"person", "people"}, {"man", "men"},     {"woman", "women"},
     {"mouse", "mice"},     {"goose", "geese"},   {"tooth", "teeth"}, {"foot", "feet"},
     {"ox", "oxen"},
@@ -286,7 +289,10 @@ std::optional<std::string> inflect(std::string_view lemma, Pos pos, const Featur
   }
   if (pos == Pos::Adj) {
     if (features.comparative || features.superlative) {
-      return grade_adjective(lemma, features.superlative);
+      if (const auto graded = grade_adjective(lemma, features.superlative)) return graded;
+      static const std::unordered_set<std::string_view> periphrastic = {"cheerful", "joyful", "pleased", "sorrowful", "intelligent", "powerful", "attractive", "cautious"};
+      if (periphrastic.contains(lemma)) return std::string(features.superlative ? "most " : "more ") + std::string(lemma);
+      return std::nullopt;
     }
     if (features.plural || features.past || features.gerund || features.third) {
       return std::nullopt;

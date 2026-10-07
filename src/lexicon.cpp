@@ -80,6 +80,10 @@ void load_line(Lexicon& lex, std::string_view line) {
     return;
   }
   const std::string flag = cols.size() >= 4 && !cols[3].empty() ? cols[3] : "free";
+  if (cols[0] == "@phrase") {
+    lex.phrase_rules.push_back({cols[1], split_char(cols[2], '|')});
+    return;
+  }
   if (cols[0] == "@group") {
     const auto pos = parse_pos(cols[1]);
     if (!pos) {
@@ -141,7 +145,7 @@ Lexicon build_lexicon() {
 }  // namespace
 
 bool Lexicon::has_lemma(std::string_view lemma) const {
-  return std::ranges::any_of(rows_, [&](const Row& row) { return row.analysis.lemma == lemma; });
+  return by_lemma_.contains(std::string(lemma));
 }
 
 bool Lexicon::has(std::string_view lemma, Pos pos) const {
@@ -149,8 +153,11 @@ bool Lexicon::has(std::string_view lemma, Pos pos) const {
 }
 
 std::optional<Analysis> Lexicon::find(std::string_view lemma, Pos pos) const {
-  for (const Row& row : rows_) {
-    if (row.analysis.lemma == lemma && row.analysis.pos == pos) {
+  const auto it = by_lemma_.find(std::string(lemma));
+  if (it == by_lemma_.end()) return {};
+  for (const auto index : it->second) {
+    const auto& row = rows_[index];
+    if (row.analysis.pos == pos) {
       return row.analysis;
     }
   }
@@ -159,17 +166,17 @@ std::optional<Analysis> Lexicon::find(std::string_view lemma, Pos pos) const {
 
 std::vector<Analysis> Lexicon::entries_for(std::string_view lemma) const {
   std::vector<Analysis> found;
-  for (const Row& row : rows_) {
-    if (row.analysis.lemma == lemma) {
-      found.push_back(row.analysis);
-    }
-  }
+  const auto it = by_lemma_.find(std::string(lemma));
+  if (it != by_lemma_.end()) for (const auto index : it->second) found.push_back(rows_[index].analysis);
   return found;
 }
 
 const std::vector<std::string>* Lexicon::synonyms(std::string_view lemma, Pos pos) const {
-  for (const Row& row : rows_) {
-    if (row.analysis.lemma == lemma && row.analysis.pos == pos) {
+  const auto it = by_lemma_.find(std::string(lemma));
+  if (it == by_lemma_.end()) return {};
+  for (const auto index : it->second) {
+    const auto& row = rows_[index];
+    if (row.analysis.pos == pos) {
       return &row.synonyms;
     }
   }
@@ -184,6 +191,7 @@ void Lexicon::add(Analysis entry, std::vector<std::string> synonyms) {
   if (find(entry.lemma, entry.pos)) {
     return;
   }
+  by_lemma_[entry.lemma].push_back(rows_.size());
   rows_.push_back(Row{std::move(entry), std::move(synonyms)});
 }
 
