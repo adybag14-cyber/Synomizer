@@ -195,7 +195,27 @@ void Lexicon::add(Analysis entry, std::vector<std::string> synonyms) {
   rows_.push_back(Row{std::move(entry), std::move(synonyms)});
 }
 
+const std::vector<std::vector<std::string>>& Lexicon::phrases_starting(std::string_view first, bool allow_variation) const {
+  static const std::vector<std::vector<std::string>> empty;
+  const auto& index = allow_variation ? fixed_phrases_by_first_ : phrases_by_first_;
+  const auto found = index.find(std::string(first));
+  return found == index.end() ? empty : found->second;
+}
+
 void Lexicon::add_phrase(std::vector<std::string> phrase) {
+  if (phrase.empty()) return;
+  const auto add = [&](auto& index) {
+    auto& bucket = index[phrase.front()];
+    bucket.push_back(phrase);
+    std::ranges::stable_sort(bucket, [](const auto& a, const auto& b) { return a.size() > b.size(); });
+  };
+  add(phrases_by_first_);
+  std::string joined;
+  for (const auto& word : phrase) { if (!joined.empty()) joined += ' '; joined += word; }
+  const bool variable = std::ranges::any_of(phrase_rules, [&](const auto& rule) {
+    return std::ranges::find(rule.forms, joined) != rule.forms.end();
+  });
+  if (!variable) add(fixed_phrases_by_first_);
   phrases_.push_back(std::move(phrase));
 }
 

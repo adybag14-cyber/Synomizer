@@ -188,7 +188,18 @@ export function loadResources(lexiconTsv, phrasesText) {
     if (words.length >= 2) phrases.push(words);
   }
   phrases.sort((a, b) => b.length - a.length);
-  return { rows, byLemma, phrases, phraseRules };
+  const phraseIndex = new Map(), fixedPhraseIndex = new Map();
+  const variableForms = new Set(phraseRules.flatMap((rule) => rule.forms));
+  const addPhrase = (index, phrase) => {
+    if (!index.has(phrase[0])) index.set(phrase[0], []);
+    index.get(phrase[0]).push(phrase);
+  };
+  // Already longest-first: indexing does not change matching precedence.
+  for (const phrase of phrases) {
+    addPhrase(phraseIndex, phrase);
+    if (!variableForms.has(phrase.join(" "))) addPhrase(fixedPhraseIndex, phrase);
+  }
+  return { rows, byLemma, phrases, phraseRules, phraseIndex, fixedPhraseIndex };
 }
 
 function findRow(resources, lemma, pos) {
@@ -1086,12 +1097,12 @@ function freezeQuotes(tokens) {
 }
 
 function freezePhrases(resources, tokens, variation = false) {
-  const phrases = variation ? resources.phrases.filter((phrase) => !(resources.phraseRules || []).some((rule) => rule.forms.includes(phrase.join(" ")))) : resources.phrases;
+  const index = variation ? resources.fixedPhraseIndex : resources.phraseIndex;
   const words = wordPositions(tokens);
   const used = new Array(words.length).fill(false);
   for (let slot = 0; slot < words.length; slot++) {
     if (used[slot]) continue;
-    for (const phrase of phrases) {
+    for (const phrase of index.get(atSlot(tokens, words, slot)) || []) {
       if (slot + phrase.length > words.length) continue;
       if (!phrase.every((part, index) => atSlot(tokens, words, slot + index) === part)) continue;
       const first = words[slot];
@@ -1376,6 +1387,7 @@ export function rewriteVariants(input, options = {}, resources, count = 3) {
   // Validate before any BigInt conversion and normalize using the public single-pass API.
   const original = rewrite(input, { ...options, synonyms: false, arrange: false }, resources).text;
   const batch = { variants: [], requested: count, attempts: 0 };
+  const profileBudget = original.split(/[ \t\r\n]+/).filter(Boolean).length > 2000 ? 1 : 4;
   const selected = [];
   const generate = (style, offset) => {
     const seed = String((BigInt(options.seed ?? 1) + BigInt(offset)) & MASK);
@@ -1389,7 +1401,7 @@ export function rewriteVariants(input, options = {}, resources, count = 3) {
   if (unique(first)) add(first);
   for (let profile = 1; profile <= 2 && batch.variants.length < count; profile++) {
     let best = null, bestDistance = -1;
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (let attempt = 0; attempt < profileBudget; attempt++) {
       const candidate = generate(profile === 1 ? "close" : "recast", profile + attempt * 3);
       if (!unique(candidate)) continue;
       const fp = fingerprint(candidate.result.text);

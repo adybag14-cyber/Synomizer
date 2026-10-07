@@ -7,7 +7,7 @@
 - Add the C++ `rewrite_variants` API and CLI `--variants` / `--style`, recording reproducible unsigned 64-bit seeds and profiles.
 - Add audited head/object-context vocabulary, phrase alternatives, guarded medial manner-adverb moves, comparative phrases and irregular verb/invariant plural support.
 - Guard food/non-food consumption, passive beneficiary frames, infinitival help, academic doctor and anatomical pupil senses; protect additional idioms and technical collocations. Remove the unsound recently/lately interchange.
-- Index native lexical lookups, fast-path disabled/single-result batches, cancel obsolete workers, and explicitly cap only card previews rather than exported text.
+- Index native lexical and native/browser phrase lookups, fast-path disabled/single-result batches, and use a smaller deterministic candidate budget for long passages. Cancel obsolete workers and explicitly cap only card previews rather than exported text.
 - Add batch parity, independent grammar/preservation assertions, native API compatibility, lexicon schema and cross-browser selection/export regressions. Preserve the 1.1.1 CI/deployment verification and Apache-2.0 licence.
 
 ## 1.1.1 — 2026-10-07

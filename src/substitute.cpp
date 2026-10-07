@@ -415,23 +415,12 @@ void freeze_quotes(std::vector<Token>& tokens) {
 
 void freeze_phrases(std::vector<Token>& tokens, bool variation) {
   const std::vector<int> words = word_positions(tokens);
-  std::vector<std::vector<std::string>> phrases = lexicon().phrases();
-  if (variation) std::erase_if(phrases, [](const auto& phrase) {
-    std::string joined;
-    for (const auto& word : phrase) { if (!joined.empty()) joined += ' '; joined += word; }
-    for (const auto& rule : lexicon().phrase_rules)
-      if (std::ranges::find(rule.forms, joined) != rule.forms.end()) return true;
-    return false;
-  });
-  std::ranges::sort(phrases, [](const std::vector<std::string>& a, const std::vector<std::string>& b) {
-    return a.size() > b.size();
-  });
   std::vector<bool> used(words.size(), false);
   for (int slot = 0; slot < static_cast<int>(words.size()); ++slot) {
     if (used[static_cast<std::size_t>(slot)]) {
       continue;
     }
-    for (const std::vector<std::string>& phrase : phrases) {
+    for (const auto& phrase : lexicon().phrases_starting(at_slot(tokens, words, slot), variation)) {
       if (slot + static_cast<int>(phrase.size()) > static_cast<int>(words.size())) {
         continue;
       }

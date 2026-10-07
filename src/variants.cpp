@@ -52,6 +52,16 @@ Variants rewrite_variants(std::string_view input, const Options& options, std::s
   auto normalized_options = options;
   normalized_options.synonyms = false; normalized_options.arrange = false;
   const auto original = rewrite(input, normalized_options).text;
+  // Long documents need three choices, not nine full-document passes. Count the
+  // same ASCII-whitespace-delimited spans in both engines (independent of UTF-8).
+  std::size_t spans = 0;
+  bool inside = false;
+  for (char c : original) {
+    const bool word = !std::string_view(" \t\r\n").contains(c);
+    if (word && !inside) ++spans;
+    inside = word;
+  }
+  const std::uint64_t profile_budget = spans > 2000 ? 1 : 4;
   std::vector<Fingerprint> selected;
   auto generate = [&](Style style, std::uint64_t offset) {
     auto settings = options;
@@ -70,11 +80,11 @@ Variants rewrite_variants(std::string_view input, const Options& options, std::s
   auto first = generate(count == 1 ? options.style : Style::Balanced, 0);
   if (count == 1) { add(std::move(first)); return batch; }
   if (unique(first)) add(first);
-  // Prefer each profile in turn. Select the most distinct of four bounded candidates.
+  // Prefer each profile; short passages also get a wider bounded diversity search.
   for (int profile = 1; profile <= 2 && batch.variants.size() < count; ++profile) {
     std::optional<Variant> best;
     int best_distance = -1;
-    for (std::uint64_t attempt = 0; attempt < 4; ++attempt) {
+    for (std::uint64_t attempt = 0; attempt < profile_budget; ++attempt) {
       auto candidate = generate(profile == 1 ? Style::Close : Style::Recast, static_cast<std::uint64_t>(profile) + attempt * 3);
       if (!unique(candidate)) continue;
       const auto fp = fingerprint(candidate.result.text);

@@ -121,7 +121,7 @@ test("Close never rearranges; operations remain off in every profile",()=>{
 });
 test("large batch remains complete with paragraphs intact",()=>{
   const text="The happy child purchased a car.\n\n".repeat(1200);
-  const result=batch(text);assert.equal(result.variants.length,3);
+  const result=batch(text);assert.equal(result.variants.length,3);assert.equal(result.attempts,3);
   for(const v of result.variants)assert.equal(v.result.text.split("\n\n").length,1201);
 });
 for(const count of [0,4,-1,1.5,"3",NaN])test(`invalid batch count ${count}`,()=>assert.throws(()=>rewriteVariants("x",{},resources,count)));
@@ -146,4 +146,9 @@ test("new medial adverb moves do not cross embedded verbs",()=>{
   const text="She carefully examined the report published in May.";
   const result=single(text,{style:"recast",synonyms:false});
   assert.equal(result.text,text);
+});
+
+test("long UTF-8 passages use the same bounded profile budget in both engines",()=>{
+  const text="中文 happy child car. ".repeat(600);
+  const result=batch(text);assert.equal(result.variants.length,3);assert.ok(result.attempts<=6);
 });

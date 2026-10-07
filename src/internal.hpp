@@ -148,6 +148,7 @@ class Lexicon {
   [[nodiscard]] std::optional<Analysis> find(std::string_view lemma, Pos pos) const;
   [[nodiscard]] std::vector<Analysis> entries_for(std::string_view lemma) const;
   [[nodiscard]] const std::vector<std::vector<std::string>>& phrases() const;
+  [[nodiscard]] const std::vector<std::vector<std::string>>& phrases_starting(std::string_view first, bool allow_variation) const;
   struct PhraseRule { std::string mode; std::vector<std::string> forms; };
   std::vector<PhraseRule> phrase_rules;
 
@@ -163,6 +164,7 @@ class Lexicon {
   std::vector<Row> rows_;
   std::unordered_map<std::string, std::vector<std::size_t>> by_lemma_;
   std::vector<std::vector<std::string>> phrases_;
+  std::unordered_map<std::string, std::vector<std::vector<std::string>>> phrases_by_first_, fixed_phrases_by_first_;
 };
 
 [[nodiscard]] const Lexicon& lexicon();
