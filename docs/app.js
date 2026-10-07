@@ -7,12 +7,16 @@ const changes = $("#changes"), seed = $("#seed"), intensity = $("#intensity");
 const MAX = 200_000, MAX_SEED = (1n << 64n) - 1n;
 let worker, ready = false, busy = false, revision = 0, running = null, pending = false;
 let timer, deadline, latest = null, ledgerLimit = 250;
+let currentBatch = null, selectedIndex = 0;
+const PROFILES = { balanced: "Balanced", close: "Light touch", recast: "Restructured" };
 const wordCount = (text) => (text.match(/\S+/g) || []).length;
 const escapeHtml = (text) => text.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
-function exportsEnabled(enabled) { for (const id of ["#copy", "#download", "#export-changes"]) $(id).disabled = !enabled; }
+function exportsEnabled(enabled) { for (const id of ["#copy", "#download", "#export-changes", "#export-variants"]) $(id).disabled = !enabled; }
 function invalidate() {
   revision++;
-  latest = null;
+  latest = null; currentBatch = null; selectedIndex = 0;
+  $("#selected-label").textContent = "Selected rewrite";
+  $("#variants").replaceChildren(); $("#variant-notice").textContent = "";
   exportsEnabled(false);
   output.replaceChildren();
   changes.replaceChildren();
@@ -22,7 +26,9 @@ function invalidate() {
 }
 function clearError() { banner.hidden = true; banner.textContent = ""; }
 function fail(message) {
-  latest = null;
+  latest = null; currentBatch = null; selectedIndex = 0;
+  $("#selected-label").textContent = "Selected rewrite";
+  $("#variants").replaceChildren(); $("#variant-notice").textContent = "";
   exportsEnabled(false);
   output.replaceChildren();
   changes.replaceChildren();
@@ -60,25 +66,84 @@ function renderLedger() {
   $("#more-changes").hidden = list.length <= ledgerLimit;
   $("#more-changes").textContent = `Show more changes (${Math.min(ledgerLimit, list.length)} of ${list.length})`;
 }
-function render(result, request) {
-  latest = { result, options: request.options };
-  clearError();
-  output.innerHTML = result.parts.map((part) => part.changed ? `<mark>${escapeHtml(part.text)}</mark>` : escapeHtml(part.text)).join("");
+function renderParts(parts, preview = false) {
+  let remaining = preview ? 5000 : Infinity;
+  const html = [];
+  for (const part of parts) {
+    if (remaining <= 0) break;
+    const text = part.text.slice(0, remaining); remaining -= text.length;
+    html.push(part.changed ? `<mark>${escapeHtml(text)}</mark>` : escapeHtml(text));
+  }
+  return html.join("");
+}
+function stats(result) {
+  const n = (kind) => result.changes.filter((c) => c.kind === kind).length;
+  return `${n("synonym")} synonyms / ${n("arrangement")} moves / ${n("phrase")} phrases`;
+}
+function selectVariant(index, focus = false) {
+  if (!currentBatch || busy || !currentBatch.batch.variants[index]) return;
+  const { batch, request } = currentBatch;
+  const variant = batch.variants[index], result = variant.result;
+  selectedIndex = index;
+  latest = { result, options: { ...request.options, seed: variant.seed, style: variant.style }, index };
+  output.innerHTML = renderParts(result.parts);
   output.setAttribute("aria-busy", "false");
   ledgerLimit = 250; renderLedger();
-  const synonyms = result.changes.filter((c) => c.kind === "synonym").length;
-  const moves = result.changes.filter((c) => c.kind === "arrangement").length;
+  $("#selected-label").textContent = `Selected: option ${index+1} / ${PROFILES[variant.style]}`;
   $("#output-count").textContent = `${wordCount(result.text).toLocaleString()} words`;
-  status.textContent = `${synonyms} synonym${synonyms === 1 ? "" : "s"} / ${moves} move${moves === 1 ? "" : "s"} / seed ${request.options.seed}${request.options.intensity === 2 ? " / Broader mode: review carefully." : ""}`;
+  for (const button of document.querySelectorAll(".choose-variant")) {
+    const chosen = Number(button.dataset.index) === index;
+    button.setAttribute("aria-pressed", String(chosen));
+    button.textContent = chosen ? "Selected" : "Choose this version";
+    button.closest(".variant-card").classList.toggle("selected", chosen);
+  }
+  status.textContent = `${batch.variants.length} option${batch.variants.length===1 ? "" : "s"} / ${stats(result)} / seed ${variant.seed} / ${PROFILES[variant.style]}${request.options.intensity === 2 ? " / Broader mode: review carefully." : ""}`;
   exportsEnabled(result.text.length > 0);
+  if (focus) output.focus({ preventScroll: true });
 }
+function render(batch, request) {
+  currentBatch = { batch, request }; selectedIndex = 0;
+  clearError();
+  const cards = $("#variants"); cards.replaceChildren();
+  const unchanged = batch.variants.length === 1 && batch.variants[0].result.text === request.text.replace(/\r\n?/g, "\n");
+  $("#variant-notice").textContent = !request.text.trim() ? "Enter text to compare up to three variations." : unchanged ?
+    "No suitable change found. Your text is kept unchanged; protection settings have not been relaxed." : batch.variants.length < batch.requested ?
+    `Found ${batch.variants.length} distinct rewrite${batch.variants.length===1 ? "" : "s"} in this bounded search. Duplicate versions are omitted; no extra changes are forced.` :
+    "Three distinct versions of your original. Compare the wording, choose a version, then copy or download it. These are approaches, not quality rankings.";
+  if (request.text) for (const [index, variant] of batch.variants.entries()) {
+    const card = document.createElement("article"); card.className = "variant-card";
+    const title = document.createElement("h3"); title.textContent = `Option ${index+1} / ${PROFILES[variant.style]}`;
+    const note = document.createElement("p"); note.className = "variant-profile";
+    note.textContent = { balanced: "Standard word choices and guarded sentence moves.", close: "Selective word substitutions; sentence order retained.", recast: "Also explores eligible phrases and extra sentence moves." }[variant.style];
+    const meta = document.createElement("p"); meta.className = "variant-meta";
+    meta.textContent = `${wordCount(variant.result.text).toLocaleString()} words / ${stats(variant.result)} / seed ${variant.seed}`;
+    const preview = document.createElement("div"); preview.className = "variant-text"; preview.tabIndex = 0;
+    preview.setAttribute("aria-label", `Option ${index+1} text`);
+    preview.innerHTML = renderParts(variant.result.parts, true);
+    const button = document.createElement("button"); button.type = "button"; button.className = "choose-variant";
+    button.dataset.index = String(index); button.setAttribute("aria-pressed", "false");
+    button.setAttribute("aria-label", `Choose option ${index+1}: ${PROFILES[variant.style]}`);
+    button.addEventListener("click", () => selectVariant(index));
+    card.append(title, note, meta, preview);
+    if (variant.result.text.length > 5000) {
+      const truncated = document.createElement("p"); truncated.className = "hint";
+      truncated.textContent = "Preview: first 5,000 characters. Choose this option to read or export the complete version.";
+      card.append(truncated);
+    }
+    card.append(button); cards.append(card);
+  }
+  selectVariant(0);
+}
+
 function setBusy(value) { busy = value; $("#cancel").hidden = !value; output.setAttribute("aria-busy", String(value)); }
 function startWorker() {
   worker?.terminate(); ready = false; setBusy(false); running = null;
   window.clearTimeout(deadline);
   try {
     worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
+    const activeWorker = worker;
     worker.onmessage = ({ data }) => {
+      if (worker !== activeWorker) return;
       if (data.type === "ready") { ready = true; $("#retry").hidden = true; if (pending) runRewrite(); return; }
       window.clearTimeout(deadline);
       const request = running;
@@ -91,6 +156,7 @@ function startWorker() {
       if (pending) runRewrite();
     };
     worker.onerror = (event) => {
+      if (worker !== activeWorker) return;
       event.preventDefault(); window.clearTimeout(deadline);
       ready = false; pending = false; setBusy(false); $("#retry").hidden = false;
       fail("The background rewriter could not start. Reload or retry in a browser supporting module workers.");
@@ -103,10 +169,11 @@ function runRewrite() {
     if (source.value.length > MAX) throw new Error("Use at most 200,000 characters in the browser. For longer files, use the C++ command-line tool.");
     const options = optionsFromForm();
     if (options.protectedTerms.length > 200 || options.protectedTerms.some((term) => term.length > 200)) throw new Error("Use at most 200 protected terms, each up to 200 characters.");
+    if (busy && running?.id !== revision) { pending = true; startWorker(); return; }
     if (!ready || busy) { pending = true; return; }
     pending = false; clearError(); exportsEnabled(false);
     running = { id: revision, text: source.value, options };
-    setBusy(true); status.textContent = "Rewriting locally in your browser...";
+    setBusy(true); status.textContent = "Comparing up to three rewrites locally in your browser...";
     worker.postMessage(running);
     deadline = window.setTimeout(() => {
       pending = false; invalidate(); startWorker();
@@ -149,7 +216,15 @@ function download(text, name, type) {
 }
 $("#download").addEventListener("click", () => { if (latest && !busy) download(latest.result.text, "synomizer-rewrite.txt", "text/plain;charset=utf-8"); });
 $("#export-changes").addEventListener("click", () => {
-  if (latest && !busy) download(JSON.stringify({ version: "1.1.1", options: latest.options, text: latest.result.text, changes: latest.result.changes }, null, 2) + "\n", "synomizer-changes.json", "application/json");
+  if (latest && !busy) download(JSON.stringify({ version: "1.2.0", options: latest.options, text: latest.result.text, changes: latest.result.changes }, null, 2) + "\n", "synomizer-changes.json", "application/json");
+});
+$("#export-variants").addEventListener("click", () => {
+  if (!currentBatch || !latest || busy) return;
+  const { batch, request } = currentBatch;
+  const data = { version: "1.2.0", original: request.text, options: request.options,
+    requested: batch.requested, attempts: batch.attempts, selected: selectedIndex+1,
+    variants: batch.variants.map((v, index) => ({ option: index+1, style: v.style, seed: v.seed, text: v.result.text, changes: v.result.changes })) };
+  download(JSON.stringify(data, null, 2) + "\n", "synomizer-variations.json", "application/json");
 });
 $("#import").addEventListener("click", () => $("#file").click());
 $("#file").addEventListener("change", async () => {

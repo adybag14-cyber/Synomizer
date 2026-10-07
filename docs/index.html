@@ -15,7 +15,7 @@
     <p class="kicker">C++23 · deterministic · Apache-2.0</p>
     <h1>Synomizer</h1>
     <p class="privacy">Local processing · No accounts · No text uploads</p>
-    <p class="deck">A different way to say it. Vary a passage with curated synonyms and conservative sentence moves, then review every change.</p>
+    <p class="deck">One original. Three possibilities. Compare context-aware word choices, a lighter edit, and more varied phrasing. Choose your favourite and review every change.</p>
   </header>
 
   <main>
@@ -31,8 +31,8 @@
       <label class="check"><input id="synonyms" type="checkbox" checked> Synonyms</label>
       <label class="check"><input id="arrange" type="checkbox" checked> Sentence moves</label>
       <label class="check"><input id="quotes" type="checkbox" checked> Keep quotations</label>
-      <button type="submit" id="rewrite">Rewrite</button>
-      <button type="button" id="variant">Another variation</button>
+      <button type="submit" id="rewrite">Generate 3 variations</button>
+      <button type="button" id="variant">New set</button>
       <button type="button" id="copy" disabled>Copy rewrite</button>
       <button type="button" id="download" class="secondary" disabled>Download .txt</button>
       <button type="button" id="import" class="secondary">Import text</button>
@@ -62,12 +62,19 @@
       </section>
       <section>
         <div class="sheet-head">
-          <h2>Rewrite</h2>
+          <h2 id="selected-label">Selected rewrite</h2>
           <p id="output-count"></p>
         </div>
-        <div id="output" class="revise" aria-live="polite" aria-label="Rewritten text"></div>
+        <div id="output" class="revise" tabindex="0" aria-live="polite" aria-label="Rewritten text"></div>
       </section>
     </div>
+
+    <section class="alternatives" aria-labelledby="variants-heading">
+      <div class="sheet-head"><h2 id="variants-heading">Three ways to say it</h2></div>
+      <p id="variant-notice" class="hint" aria-live="polite"></p>
+      <div id="variants" class="variants" role="group" aria-label="Choose a rewritten version"></div>
+      <button id="export-variants" type="button" class="secondary" disabled>Download all versions (.json)</button>
+    </section>
 
     <section class="ledger">
       <div class="sheet-head">
@@ -82,7 +89,7 @@
 
   <footer class="colophon">
     <p>Review before using. Mechanical rewriting cannot guarantee identical meaning or perfect grammar. The C++23 command-line tool is the reference. This page runs the same rules in the browser. It is not a language model, and it does not claim a perfect paraphrase: metaphor, register, and the emphasis of a moved clause can still shift.</p>
-    <p>Version 1.1.1 · Apache-2.0 · Text and settings stay in memory and are not saved after a reload. This site uses no third-party fonts, analytics, or rewriting services.</p>
+    <p>Version 1.2.0 · Apache-2.0 · Text and settings stay in memory and are not saved after a reload. This site uses no third-party fonts, analytics, or rewriting services.</p>
     <p><a href="https://github.com/adybag14-cyber/Synomizer">adybag14-cyber/Synomizer</a></p>
   </footer>
   <noscript><p class="banner">Synomizer needs JavaScript for the live rewrite.</p></noscript>

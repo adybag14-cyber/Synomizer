@@ -77,7 +77,9 @@ On Windows, substitute the executable path appropriate to your CMake generator.
 | `--protect TEXT` | Protect a whole word or phrase. Repeat as needed. |
 | `--vary-quotes` | Allow substitutions inside quotations; their structure still does not move. |
 | `--show-changes` | Write each change to stderr. |
-| `--json` | Write version, string-valued seed, rewritten text and structured changes as JSON. |
+| `--json` | Write version, string-valued seed, profile, text and structured changes as JSON. |
+| `--variants N` | Generate up to 1, 2 or 3 distinct alternatives. |
+| `--style NAME` | Reproduce a single `balanced`, `close` or `recast` candidate. |
 | `--text TEXT` | Use an inline passage instead of a file or stdin. |
 | `--output FILE`, `-o FILE` | Write to a file instead of stdout. |
 | `--` | End options, for example before a filename beginning with `-`. |
@@ -113,11 +115,44 @@ Sentence moves are skipped for uncertain negation/focus scope, embedded clauses,
 
 ## Sample
 
-The 97-word passage in `examples/sample.txt`, at seed 1 and standard intensity in version 1.1.1:
+The 97-word passage in `examples/sample.txt`, at seed 1 and standard intensity in version 1.2.0:
 
 > The cautious instructor assisted the cheerful youngsters. The class commenced the project late because the weather was chilly. She quietly clarified the primary concept, and the learners were happy to help. They bought a little automobile for the school journey and swiftly located the correct route. The tranquil doctor said the weary lad was healthy. The group stayed joyful although the trip was long. The author described the ultimate outcome in a truthful report. When the assembly ended, the throng was hushed. The local learners located a helpful reply and stayed tranquil. It was a little triumph.
 
 Inspect the change ledger or use `--show-changes` to review individual operations. The number of words is not forced to remain fixed.
+
+## Three simultaneous choices
+
+The editor generates a batch automatically and displays up to three distinct options together:
+
+| Approach | What it explores |
+| --- | --- |
+| **Balanced** | The standard eligible substitutions and guarded sentence moves. |
+| **Light touch** (`close`) | A deterministic selective edit, targeting roughly half the eligible substitutions and retaining sentence order. |
+| **Restructured** (`recast`) | Eligible word substitutions, additional manner-adverb placement, and audited phrase alternatives. |
+
+Choose any card to update the full selected text and its change ledger. Copy, text download and change-log export always use that selection. **Download all versions** exports every complete candidate, its seed/profile, the original and the selected option. Long card previews stop at 5,000 characters with an explicit notice; the selected view and exports are complete. Text stays in memory, and editing cancels obsolete computation.
+
+Every candidate is generated from the **original**, not by repeatedly rewriting a previous paraphrase. The first candidate uses the base seed with Balanced rules. For later profiles a bounded search chooses wording that differs from the already-selected options, using word/bigram overlap. This is a diversity heuristic, **not** a meaning-preservation or quality score. Multi-result searches try at most 12 candidate rewrites and may return fewer than requested. Above 2,000 whitespace-separated spans, the search tries one candidate per profile first (at most six total with duplicate fallbacks), avoiding repeated full-document passes while keeping all three approaches. Duplicate rewrites are omitted; an unrewritable passage is shown unchanged. Intensity, disabled operations, quote protection and protected terms are never relaxed to fill a quota. The batch uses its three profiles even when a single-pass style was supplied.
+
+```sh
+# Three labelled alternatives, or structured results for an application
+./build/synomizer --variants 3 --seed 1 examples/sample.txt
+./build/synomizer --variants 3 --json --protect "control group" passage.txt
+
+# Reproduce an individual candidate using its recorded seed and profile
+./build/synomizer --style recast --seed 9 passage.txt
+```
+
+`--variants` accepts 1, 2 or 3 (default 1). Single-result CLI output remains a plain rewrite unless `--json` is requested. Batch JSON includes `requested`, `attempts` and a `variants` array; each entry carries `seed`, `style`, `text` and `changes`. Seed arithmetic wraps as an unsigned 64-bit integer. A fixed version, input, settings, profile and seed reproduce the same result.
+
+### Context-aware vocabulary and phrase rules
+
+The shared lexicon now supports positive noun-head/object contexts. For example, **clear explanation** can become **lucid explanation**, while **clear sky** and the verb in **clear the room** are not treated as the same sense. Other audited additions cover concise summaries, spacious rooms, document retention, verification and evaluation. Candidate-specific guards distinguish eating a meal from consuming electricity and avoid turning the passive **was shown the technique** into **was demonstrated the technique**.
+
+Recast mode can vary sentence-initial transitions such as **In addition,** / **Furthermore,** and **Therefore,** / **As a result,**; use **despite** / **in spite of**; and shorten a guarded purpose phrase **in order to** to **to**. It never blindly expands infinitival `to`. These phrase rules are disabled in intensity 0, under negation, inside protected quotations, or in term-locked sentences. Risky readings of `put ... in order to ...` are left alone. Phrase edits are separately identified in the ledger.
+
+Audited comparative targets can use **more cheerful** / **most cheerful** rather than invalid suffix forms. Newly used irregular verbs retain **kept**, **shown** and their other forms; plural **aircraft** is not written as `aircrafts`. A hash-indexed native lexicon avoids scanning every row for each lookup. These are local grammatical/context rules, not general language understanding; review every candidate.
 
 ## Library API
 
@@ -132,9 +167,14 @@ options.intensity = 1;
 options.protected_terms = {"control group", "Alice"};
 const auto result = synomizer::rewrite("The happy child bought a car.", options);
 // result.text; result.changes (kind, before, after, detail)
+const auto choices = synomizer::rewrite_variants("The happy child bought a car.", options, 3);
+for (const auto& choice : choices.variants) {
+  // choice.seed; choice.style; choice.result.text; choice.result.changes
+}
+// ChangeKind also includes Phrase; count outside 1..3 throws std::invalid_argument.
 ```
 
-The public API clamps integer intensity values to the range 0–2. The browser API rejects unsafe numeric seeds; pass a string or bigint for values above JavaScript's safe integer range.
+The public API clamps integer intensity values to the range 0–2. The browser exports `rewriteVariants(input, options, resources, count = 3)` alongside `rewrite`. Its variants contain `{seed, style, result}`. The browser API rejects unsafe numeric seeds; pass a string or bigint for values above JavaScript's safe integer range.
 
 ## Develop and test the site
 

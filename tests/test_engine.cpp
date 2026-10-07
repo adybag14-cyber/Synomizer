@@ -123,7 +123,7 @@ int main() {
   expect_eq(run("They find out things.").text, "They find out things.", "phrasal find out stays");
   expect_eq(run("A person arrived.").text, "An individual arrived.", "person takes an");
   expect_eq(run("A bigger car waited.").text, "A larger automobile waited.", "comparative big becomes larger");
-  expect_eq(run("She is happier today.").text, "She is happier today.", "happier has no grammatical synonym");
+  expect_eq(run("She is happier today.").text, "She is more cheerful today.", "comparative uses a grammatical more-phrase");
   expect_eq(run("They ran fast.").text, "They ran fast.", "fast after a verb stays adverbial");
   {
     const std::string text = run("They remained calm.").text;

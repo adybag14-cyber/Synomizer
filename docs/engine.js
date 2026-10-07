@@ -5,6 +5,8 @@
 const MASK = (1n << 64n) - 1n;
 
 const VERBS = [
+  ["keep", "keeps", "kept", "kept", "keeping"],
+  ["show", "shows", "showed", "shown", "showing"],
   ["buy", "buys", "bought", "bought", "buying"],
   ["find", "finds", "found", "found", "finding"],
   ["eat", "eats", "ate", "eaten", "eating"],
@@ -17,6 +19,7 @@ const VERBS = [
 ];
 
 const NOUNS = [
+  ["aircraft", "aircraft"],
   ["child", "children"], ["person", "people"], ["man", "men"], ["woman", "women"],
   ["mouse", "mice"], ["goose", "geese"], ["tooth", "teeth"], ["foot", "feet"], ["ox", "oxen"],
 ];
@@ -153,6 +156,7 @@ function keyOf(lemma, pos) {
 
 export function loadResources(lexiconTsv, phrasesText) {
   const rows = new Map();
+  const phraseRules = [];
   const byLemma = new Map();
   const add = (lemma, pos, synonyms, flag) => {
     const clean = synonyms.filter((syn) => syn && syn !== lemma);
@@ -168,6 +172,7 @@ export function loadResources(lexiconTsv, phrasesText) {
     const cols = line.split("\t").map((part) => part.trim());
     if (cols.length < 3) continue;
     const flag = cols[3] || "free";
+    if (cols[0] === "@phrase") { phraseRules.push({ mode: cols[1], forms: cols[2].split("|") }); continue; }
     if (cols[0] === "@group") {
       const members = cols[2].split("|").map((part) => part.trim()).filter(Boolean);
       for (const member of members) add(member, cols[1], members, flag);
@@ -183,7 +188,18 @@ export function loadResources(lexiconTsv, phrasesText) {
     if (words.length >= 2) phrases.push(words);
   }
   phrases.sort((a, b) => b.length - a.length);
-  return { rows, byLemma, phrases };
+  const phraseIndex = new Map(), fixedPhraseIndex = new Map();
+  const variableForms = new Set(phraseRules.flatMap((rule) => rule.forms));
+  const addPhrase = (index, phrase) => {
+    if (!index.has(phrase[0])) index.set(phrase[0], []);
+    index.get(phrase[0]).push(phrase);
+  };
+  // Already longest-first: indexing does not change matching precedence.
+  for (const phrase of phrases) {
+    addPhrase(phraseIndex, phrase);
+    if (!variableForms.has(phrase.join(" "))) addPhrase(fixedPhraseIndex, phrase);
+  }
+  return { rows, byLemma, phrases, phraseRules, phraseIndex, fixedPhraseIndex };
 }
 
 function findRow(resources, lemma, pos) {
@@ -275,7 +291,8 @@ function inflect(lemma, pos, features) {
     return lemma;
   }
   if (pos === "adj") {
-    if (features.comparative || features.superlative) return grade(lemma, features.superlative);
+    if (features.comparative || features.superlative) return grade(lemma, features.superlative) ||
+        (["cheerful", "joyful", "pleased", "sorrowful", "intelligent", "powerful", "attractive", "cautious"].includes(lemma) ? `${features.superlative ? "most" : "more"} ${lemma}` : null);
     if (features.plural || features.past || features.gerund || features.third) return null;
     return lemma;
   }
@@ -834,7 +851,31 @@ function tryAdjectives(resources, tokens, words) {
   return null;
 }
 
-function arrange(resources, tokens, enabled) {
+
+function tryMedialAdverb(resources, tokens, words) {
+  const verb = (t) => t.word && looksLikeVerb(resources, t.text);
+  const coord = (t) => t.word && coordinator(lower(t.text));
+  if (words.length < 3 || !rangeHas(tokens, 0, tokens.length, verb) || rangeHas(tokens, 0, tokens.length, coord)) return null;
+  if (tokens.filter((t)=>verb(t) && !AUX.has(lower(t.text))).length > 1) return null;
+  const punct = punctIndex(tokens), limit = punct < 0 ? tokens.length : punct;
+  const slot = 1, index = words[slot], adv = tokens[index];
+  const prev = wordAt(tokens, words, 0);
+  if (adv.frozen || !manner(resources, adv) || knownAdverb(resources, prev) || AUX.has(prev) || !SUBJECTS.has(prev)) return null;
+  const next = wordAt(tokens, words, 2);
+  if (!analyze(resources, next, false).some((a) => a.pos === "verb" && (a.features.past || a.features.third))) return null;
+  if (words[2] !== index+2 || !isSpace(tokens[index+1])) return null;
+  for (let k = 3; k < words.length; k++) {
+    const w = wordAt(tokens, words, k);
+    if (knownAdverb(resources, w) || subordinatorWord(w)) return null;
+  }
+  const result = sliceTokens(tokens, 0, index);
+  appendSlice(result, sliceTokens(tokens, index+2, limit));
+  appendSlice(result, [{ ...adv }]);
+  if (punct >= 0) result.push({ ...tokens[punct] });
+  return finish(result, concat(tokens), "Moved an unmodified medial manner adverb to the end");
+}
+
+function arrange(resources, tokens, enabled, extended = false) {
   const scope = new Set("not never no neither nor only just hardly scarcely barely if unless whether that which who whom whose where why how while to without can could may might must shall should will would cannot say says said tell tells told know knows knew think thinks thought believe believes believed wonder wonders wondered very too so quite rather almost nearly less more least most enough especially particularly".split(" "));
   let subordinators = 0, commas = 0, thirdPerson = false;
   for (const token of tokens) {
@@ -849,7 +890,7 @@ function arrange(resources, tokens, enabled) {
   }
   if (!enabled || subordinators > 1 || commas > 1 || (subordinators && thirdPerson)) return null;
   const words = wordPositions(tokens);
-  return tryClause(resources, tokens, words) || tryAdverb(resources, tokens, words) || tryAdjectives(resources, tokens, words);
+  return tryClause(resources, tokens, words) || (extended && tryMedialAdverb(resources, tokens, words)) || tryAdverb(resources, tokens, words) || tryAdjectives(resources, tokens, words);
 }
 
 function fnv1a(text) {
@@ -871,7 +912,7 @@ function mix64(value) {
 function intensityAllows(intensity, pos, flag) {
   if (flag === "careful") return intensity >= 2;
   if (intensity <= 0) {
-    if (pos === "adj" && (flag === "free" || flag === "time" || flag === "quant")) return true;
+    if (pos === "adj" && (flag === "free" || flag === "time" || flag === "quant" || flag.startsWith("head:"))) return true;
     return pos === "adv" && flag === "manner";
   }
   return true;
@@ -997,6 +1038,48 @@ function timeContext(resources, tokens, words, slot) {
   return false;
 }
 
+
+function contextAllows(resources, chosen, tokens, words, slot) {
+  const prev = atSlot(tokens, words, slot-1), next = atSlot(tokens, words, slot+1);
+  let head = "";
+  for (let k=slot+1; k<words.length && k<=slot+5; k++) {
+    if (words[k] !== words[k-1]+2 || !isSpace(tokens[words[k]-1])) break;
+    const w=atSlot(tokens,words,k);
+    if (k===slot+1 && chosen.pos==="verb" && DETERMINERS.has(w)) continue;
+    if (knownAdjective(resources,w) || knownAdverb(resources,w)) continue;
+    head=w; break;
+  }
+  if (chosen.flag.startsWith("head:") || chosen.flag.startsWith("object:")) {
+    const allowed=chosen.flag.slice(chosen.flag.indexOf(":")+1).split("|");
+    if (!head || !allowed.includes(head)) return false;
+  }
+  const lemma=chosen.lemma;
+  if (chosen.pos==="adj") {
+    if (DETERMINERS.has(next)) return false;
+    if (lemma==="chief" && !knownNoun(resources,next)) return false;
+    if (lemma==="cold" && ["a","the"].includes(prev) && !knownNoun(resources,next)) return false;
+    if (lemma==="little" && ["","of","more","less"].includes(next)) return false;
+  }
+  if (chosen.pos==="noun") {
+    if (["objective","individual"].includes(lemma) && knownNoun(resources,next)) return false;
+    if (lemma==="doctor" && (next==="of" || head==="philosophy")) return false;
+    if (lemma==="pupil") for(let k=Math.max(0,slot-3);k<Math.min(words.length,slot+4);k++) {
+      if (["eye","eyes","dilated","dilation","iris","retina"].includes(atSlot(tokens,words,k))) return false;
+    }
+  }
+  if (chosen.pos==="verb") {
+    let cue=prev;
+    for(let k=slot-2;k>=0 && k>=slot-5 && (knownAdverb(resources,cue) || ["not","never","n't"].includes(cue));k--) cue=atSlot(tokens,words,k);
+    if (lemma==="show" && chosen.features.participle && BE.has(cue)) return false;
+    if (["help","assist","aid"].includes(lemma) && next==="to") return false;
+    if (["find","locate"].includes(lemma) && ["that","whether","why","how"].includes(next)) return false;
+    if (["decline","refuse"].includes(lemma) && !head && next!=="to") return false;
+    if (["eat","consume"].includes(lemma) && !["food","meal","meals","breakfast","lunch","dinner","cake","sandwich","bread","pizza","apple","apples","rice","snack","snacks","fish","beef","fruit","vegetables","soup"].includes(head)) return false;
+    if (lemma==="recall" && ["product","products","vehicles","drug","drugs"].includes(head)) return false;
+  }
+  return true;
+}
+
 function withPossessive(word, possessive) {
   if (!possessive || !word) return word;
   return word.endsWith("s") ? `${word}'` : `${word}'s`;
@@ -1013,12 +1096,13 @@ function freezeQuotes(tokens) {
   }
 }
 
-function freezePhrases(resources, tokens) {
+function freezePhrases(resources, tokens, variation = false) {
+  const index = variation ? resources.fixedPhraseIndex : resources.phraseIndex;
   const words = wordPositions(tokens);
   const used = new Array(words.length).fill(false);
   for (let slot = 0; slot < words.length; slot++) {
     if (used[slot]) continue;
-    for (const phrase of resources.phrases) {
+    for (const phrase of index.get(atSlot(tokens, words, slot)) || []) {
       if (slot + phrase.length > words.length) continue;
       if (!phrase.every((part, index) => atSlot(tokens, words, slot + index) === part)) continue;
       const first = words[slot];
@@ -1117,6 +1201,7 @@ function substitute(resources, tokens, options, ordinal) {
     }
     if (!best || tied) continue;
     const chosen = kept[0];
+    if (!contextAllows(resources, chosen, context, words, slot)) continue;
     if (chosen.lemma === "however" && tokens[words[slot] + 1]?.text !== ",") continue;
     if (chosen.pos === "adv" && ["nearly", "almost"].includes(chosen.lemma) && ["no", "not", "never"].includes(next)) continue;
     if (chosen.flag === "quant") {
@@ -1141,6 +1226,7 @@ function substitute(resources, tokens, options, ordinal) {
     if (usable.length === 0) continue;
     const wordOrdinal = ordinal + BigInt(slot);
     const mixed = mix64((BigInt(options.seed) ^ (((wordOrdinal + 1n) * 0xD1B54A32D192ED03n) & MASK) ^ fnv1a(chosen.lemma)) & MASK);
+    if (options.style === "close" && mix64(mixed ^ 0xA0761D6478BD642Fn) % 100n >= 50n) continue;
     const picked = usable[Number(mixed % BigInt(usable.length))];
     const surface = applyCaps(withPossessive(picked, chosen.features.possessive), token.text);
     if (lower(surface) === lower(token.text)) continue;
@@ -1198,7 +1284,9 @@ export function rewrite(input, options = {}, resources) {
   if ((typeof rawSeed === "number" && !Number.isSafeInteger(rawSeed)) || !/^[0-9]+$/.test(String(rawSeed)) || BigInt(rawSeed) > MASK) throw new RangeError("Seed must be an unsigned 64-bit integer (pass large values as text).");
   if (options.intensity !== undefined && !Number.isInteger(options.intensity)) throw new RangeError("Intensity must be an integer.");
   if (options.protectedTerms !== undefined && (!Array.isArray(options.protectedTerms) || options.protectedTerms.some((term) => typeof term !== "string"))) throw new TypeError("Protected terms must be a list of strings.");
+  if (options.style !== undefined && !["balanced", "close", "recast"].includes(options.style)) throw new RangeError("Style must be balanced, close, or recast.");
   const settings = {
+    style: options.style ?? "balanced",
     seed: options.seed ?? 1,
     intensity: Math.min(2, Math.max(0, options.intensity ?? 1)),
     synonyms: options.synonyms !== false,
@@ -1216,10 +1304,12 @@ export function rewrite(input, options = {}, resources) {
     }
     let tokens = piece.tokens.map((token) => ({ ...token }));
     if (settings.protectQuotes) freezeQuotes(tokens);
-    freezePhrases(resources, tokens);
+    freezePhrases(resources, tokens, settings.style === "recast" && settings.synonyms && settings.intensity > 0);
     freezeNames(resources, tokens);
     const locked = freezeTerms(tokens, options.protectedTerms || []);
-    const arranged = arrange(resources, tokens, settings.arrange && !locked);
+    if (!locked) varyPhrases(resources, tokens, settings, result.changes);
+    if (settings.style === "recast") freezePhrases(resources, tokens);
+    const arranged = arrange(resources, tokens, settings.arrange && !locked && settings.style !== "close", settings.style === "recast");
     if (arranged) {
       tokens = arranged.tokens;
       result.changes.push(arranged.change);
@@ -1234,4 +1324,98 @@ export function rewrite(input, options = {}, resources) {
     result.text += concat(substituted.tokens);
   }
   return result;
+}
+
+
+function varyPhrases(resources, tokens, options, changes) {
+  if (!options.synonyms || options.style !== "recast" || options.intensity < 1) return;
+  if (tokens.some((t) => ["not", "never", "no"].includes(lower(t.text)) || lower(t.text).includes("n't"))) return;
+  for (let start = 0; start < tokens.length; start++) {
+    if (!tokens[start].word || tokens[start].frozen) continue;
+    let replaced = false;
+    for (const rule of resources.phraseRules || []) {
+      if (rule.mode === "purpose" && tokens.some((t) => ["put","set","get","got","keep","kept","bring","brought","arrange","arranged"].includes(lower(t.text)))) continue;
+      for (let form = 0; form < rule.forms.length; form++) {
+        if (rule.mode === "purpose" && form !== 0) continue;
+        let match = "", end = start;
+        for (; end < tokens.length; end++) {
+          const token = tokens[end];
+          if (token.frozen || (!token.word && /[^ \t]/.test(token.text))) break;
+          if (token.word) match += (match ? " " : "") + lower(token.text);
+          if (match === rule.forms[form] || match.length > rule.forms[form].length) break;
+        }
+        if (end === tokens.length || match !== rule.forms[form] || tokens[end].frozen || !tokens[end].word) continue;
+        if (rule.mode === "front" && (start !== 0 || tokens[end+1]?.text !== ",")) continue;
+        if (rule.mode !== "front" && (!tokens[end+2]?.word || tokens[end+2].frozen)) continue;
+        const alternatives = rule.forms.filter((word) => word !== rule.forms[form]);
+        if (!alternatives.length) continue;
+        const replacement = applyCaps(alternatives[Number(BigInt(options.seed) % BigInt(alternatives.length))], tokens[start].text);
+        const before = concat(tokens.slice(start, end+1));
+        changes.push({ kind: "phrase", before, after: replacement, detail: `Equivalent ${rule.mode} phrase` });
+        tokens.splice(start, end-start+1, { text: replacement, word: false, frozen: true, replaced: true });
+        replaced = true;
+        break;
+      }
+      if (replaced) break;
+    }
+  }
+}
+function fingerprint(text) {
+  const result = new Set();
+  let previous = "";
+  for (const word of lower(text).split(/[ \t\r\n]+/).filter(Boolean)) {
+    result.add("w:" + word);
+    if (previous) result.add("b:" + previous + "\0" + word);
+    previous = word;
+  }
+  return result;
+}
+function wordingDistance(a, b) {
+  let intersection = 0;
+  for (const key of a) if (b.has(key)) intersection++;
+  const total = a.size + b.size - intersection;
+  return total ? Math.floor(1000 * (total-intersection) / total) : 0;
+}
+// A bounded diversity search, not a semantic-quality scoring model.
+export function rewriteVariants(input, options = {}, resources, count = 3) {
+  if (!Number.isInteger(count) || count < 1 || count > 3) throw new RangeError("Variant count must be 1, 2, or 3.");
+  if (count === 1 || (options.synonyms === false && options.arrange === false) || input === "") {
+    const style = count === 1 ? (options.style ?? "balanced") : "balanced";
+    const result = rewrite(input, { ...options, style }, resources);
+    return { requested: count, attempts: 1, variants: [{ seed: String(BigInt(options.seed ?? 1)), style, result }] };
+  }
+  // Validate before any BigInt conversion and normalize using the public single-pass API.
+  const original = rewrite(input, { ...options, synonyms: false, arrange: false }, resources).text;
+  const batch = { variants: [], requested: count, attempts: 0 };
+  const profileBudget = original.split(/[ \t\r\n]+/).filter(Boolean).length > 2000 ? 1 : 4;
+  const selected = [];
+  const generate = (style, offset) => {
+    const seed = String((BigInt(options.seed ?? 1) + BigInt(offset)) & MASK);
+    batch.attempts++;
+    return { seed, style, result: rewrite(input, { ...options, seed, style }, resources) };
+  };
+  const unique = (v) => v.result.text !== original && !batch.variants.some((old) => old.result.text === v.result.text);
+  const add = (v) => { selected.push(fingerprint(v.result.text)); batch.variants.push(v); };
+  const first = generate(count === 1 ? (options.style ?? "balanced") : "balanced", 0);
+  if (count === 1) { add(first); return batch; }
+  if (unique(first)) add(first);
+  for (let profile = 1; profile <= 2 && batch.variants.length < count; profile++) {
+    let best = null, bestDistance = -1;
+    for (let attempt = 0; attempt < profileBudget; attempt++) {
+      const candidate = generate(profile === 1 ? "close" : "recast", profile + attempt * 3);
+      if (!unique(candidate)) continue;
+      const fp = fingerprint(candidate.result.text);
+      let score = 1000;
+      for (const other of selected) score = Math.min(score, wordingDistance(fp, other));
+      if (score > bestDistance) { bestDistance = score; best = candidate; }
+    }
+    if (best) add(best);
+  }
+  for (const offset of [3, 6, 9]) {
+    if (batch.variants.length >= count) break;
+    const candidate = generate("balanced", offset);
+    if (unique(candidate)) add(candidate);
+  }
+  if (!batch.variants.length) add(first);
+  return batch;
 }

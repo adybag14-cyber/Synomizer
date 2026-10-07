@@ -129,7 +129,6 @@ numerous	adj	many	quant
 @group	adv	badly|poorly	free
 @group	adv	correctly|accurately	free
 @group	adv	eventually|ultimately	free
-@group	adv	recently|lately	free
 
 @group	noun	car|automobile	free
 @group	noun	doctor|physician	free
@@ -248,3 +247,28 @@ usage	noun	use	free
 @group	verb	explain|clarify	free
 @group	verb	end|conclude	free
 @group	verb	change|alter	careful
+
+# Recast-only phrase rules. Front rules require sentence-initial position and a comma.
+@phrase	front	in addition|additionally|furthermore|moreover	free
+@phrase	front	for this reason|therefore|consequently|as a result	free
+@phrase	front	at the present time|currently	free
+@phrase	connector	in spite of|despite	free
+@phrase	purpose	in order to|to	free
+
+# Audited additions: head/object flags require an explicit adjacent noun context.
+@group	adj	clear|lucid	head:explanation|explanations|description|descriptions|prose|account|instructions|instruction|presentation|writing|summary
+@group	adj	thorough|comprehensive	head:review|reviews|inspection|examination|assessment|analysis|investigation|report|study|evaluation
+@group	adj	sturdy|robust	head:chair|table|shelf|shelves|frame|structure|construction|box|boxes
+@group	adj	spacious|roomy	head:room|rooms|house|houses|apartment|apartments|cabin|cabins|office|offices|car|cars
+@group	adj	reliable|dependable	free
+@group	adj	durable|long-lasting	head:material|materials|fabric|fabrics|coating|furniture|equipment|product|products
+@group	adj	lengthy|long	head:report|reports|document|documents|explanation|description|discussion|meeting|journey|trip|visit|delay|wait|lecture
+@group	adj	concise|succinct	head:report|reports|summary|summaries|description|explanation|account|answer|reply|statement|overview
+@group	verb	evaluate|assess	object:proposal|proposals|plan|plans|report|reports|result|results|performance|evidence|application|applications|method|methods|risk|risks
+@group	verb	verify|confirm	object:detail|details|identity|result|results|address|number|numbers|information|accuracy|receipt|receipts|date|dates
+@group	verb	retain|keep	object:record|records|copy|copies|receipt|receipts|document|documents|file|files|evidence
+@group	verb	demonstrate|show	object:method|methods|technique|techniques|procedure|procedures|process|processes|example|examples
+@group	noun	bicycle|bike	free
+@group	noun	luggage|baggage	mass
+
+@group	verb	consume|eat	object:food|meal|meals|breakfast|lunch|dinner|cake|sandwich|bread|pizza|apple|apples|rice|snack|snacks|fish|beef|fruit|vegetables|soup
