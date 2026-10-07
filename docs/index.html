@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Synomizer</title>
+  <meta name="description" content="A C++23 tool that varies English wording with grammatical synonyms and safe sentence moves. The same rules run in this page.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,560;0,9..144,640;1,9..144,560&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="mast">
+    <p class="kicker">C++23 · deterministic · Apache-2.0</p>
+    <h1>Synomizer</h1>
+    <p class="deck">Scan a passage. Where a synonym or a sentence move stays grammatical, write the same meaning with different words.</p>
+  </header>
+
+  <main>
+    <form class="tools" id="tools">
+      <label>Seed <input id="seed" name="seed" type="text" inputmode="numeric" value="1" autocomplete="off" spellcheck="false"></label>
+      <label>Intensity
+        <select id="intensity" name="intensity">
+          <option value="0">0 · adjectives and manner</option>
+          <option value="1" selected>1 · safe words</option>
+          <option value="2">2 · also narrower words</option>
+        </select>
+      </label>
+      <label class="check"><input id="synonyms" type="checkbox" checked> Synonyms</label>
+      <label class="check"><input id="arrange" type="checkbox" checked> Sentence moves</label>
+      <label class="check"><input id="quotes" type="checkbox" checked> Keep quotations</label>
+      <button type="submit" id="rewrite">Rewrite</button>
+      <button type="button" id="copy">Copy rewrite</button>
+      <button type="button" id="reset">Sample</button>
+    </form>
+    <p class="status" id="status" role="status">Loading the word lists…</p>
+    <p class="banner" id="banner" hidden></p>
+
+    <div class="sheets">
+      <section>
+        <div class="sheet-head">
+          <h2>Copy</h2>
+          <p id="source-count"></p>
+        </div>
+        <textarea id="source" spellcheck="true" aria-label="Original text"></textarea>
+      </section>
+      <section>
+        <div class="sheet-head">
+          <h2>Revise</h2>
+          <p id="output-count"></p>
+        </div>
+        <div id="output" class="revise" aria-live="polite" aria-label="Rewritten text"></div>
+      </section>
+    </div>
+
+    <section class="ledger">
+      <div class="sheet-head">
+        <h2>Proof</h2>
+        <p>Marked words in the revise column differ from the copy. A move can keep a word and change its place.</p>
+      </div>
+      <ol id="changes"></ol>
+    </section>
+  </main>
+
+  <footer class="colophon">
+    <p>The command-line tool is the reference. This page runs the same rules in the browser. It is not a language model, and it does not claim a perfect paraphrase: metaphor, register, and the emphasis of a moved clause can still shift.</p>
+    <p><a href="https://github.com/adybag14-cyber/Synomizer">adybag14-cyber/Synomizer</a></p>
+  </footer>
+  <noscript><p class="banner">Synomizer needs JavaScript for the live rewrite.</p></noscript>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

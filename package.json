@@ -1,0 +1,6 @@
+{
+  "name": "synomizer",
+  "private": true,
+  "type": "module",
+  "description": "Marks this repo as an ES module so Node can load docs/engine.js during tests. The GitHub Pages site does not use this file."
+}

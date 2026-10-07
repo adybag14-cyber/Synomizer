@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure and build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
+      - name: C++ tests
+        run: ctest --test-dir build --output-on-failure
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Browser engine matches the binary
+        run: node --test tests/demo_engine.test.mjs
+        env:
+          SYNOMIZER_BIN: ${{ github.workspace }}/build/synomizer
+
+  pages:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble the site
+        run: |
+          mkdir -p site/data
+          cp docs/index.html docs/styles.css docs/app.js docs/engine.js docs/favicon.svg site/
+          cp data/lexicon.tsv data/phrases.txt site/data/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
