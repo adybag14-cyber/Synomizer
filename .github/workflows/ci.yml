@@ -14,27 +14,96 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  native:
+    name: Native / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Configure and build
-        run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-          cmake --build build
-      - name: C++ tests
-        run: ctest --test-dir build --output-on-failure
+      - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Browser engine matches the binary
-        run: node --test tests/demo_engine.test.mjs
+          cache: npm
+      - name: Configure and build C++23
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --parallel 2
+      - name: Native regression suite
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Locate reference executable
+        shell: bash
+        run: |
+          if [ -f build/Release/synomizer.exe ]; then
+            echo "SYNOMIZER_BIN=$GITHUB_WORKSPACE/build/Release/synomizer.exe" >> "$GITHUB_ENV"
+          elif [ -f build/synomizer.exe ]; then
+            echo "SYNOMIZER_BIN=$GITHUB_WORKSPACE/build/synomizer.exe" >> "$GITHUB_ENV"
+          else
+            echo "SYNOMIZER_BIN=$GITHUB_WORKSPACE/build/synomizer" >> "$GITHUB_ENV"
+          fi
+      - name: Browser/native parity, grammar guards and CLI tests
+        run: npm test
+      - name: Package executable with licence and usage
+        shell: bash
+        run: |
+          mkdir -p distribution
+          cp "$SYNOMIZER_BIN" distribution/
+          cp LICENSE README.md CHANGELOG.md distribution/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: synomizer-${{ runner.os }}-${{ runner.arch }}
+          path: distribution/
+          if-no-files-found: error
+          retention-days: 30
+
+  sanitizer:
+    name: Address and undefined-behaviour sanitizers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build and test with sanitizers
         env:
           SYNOMIZER_BIN: ${{ github.workspace }}/build/synomizer
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+          cmake --build build --parallel 2
+          ctest --test-dir build --output-on-failure
+          npm test
+
+  browser:
+    name: Browser / Chromium, Firefox, WebKit, mobile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Install test browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: End-to-end editor tests under the Pages subpath
+        run: npm run test:web
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-report-and-screenshots
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
 
   pages:
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Deploy GitHub Pages
+    needs: [native, sanitizer, browser]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -43,14 +112,18 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
-      - name: Assemble the site
-        run: |
-          mkdir -p site/data
-          cp docs/index.html docs/styles.css docs/app.js docs/engine.js docs/favicon.svg site/
-          cp data/lexicon.tsv data/phrases.txt site/data/
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/configure-pages@v5
+      - name: Assemble static site, worker and shared word lists
+        run: npm run build:site
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: site
       - id: deployment

@@ -342,33 +342,16 @@ std::string with_possessive(std::string word, bool possessive) {
 }
 
 void freeze_quotes(std::vector<Token>& tokens) {
-  bool straight = false;
-  bool open_double = false;
-  bool open_single = false;
-  for (Token& token : tokens) {
-    if (token.text == "\"") {
-      straight = !straight;
-      continue;
-    }
-    if (token.text == "\xE2\x80\x9C") {
-      open_double = true;
-      continue;
-    }
-    if (token.text == "\xE2\x80\x9D") {
-      open_double = false;
-      continue;
-    }
-    if (token.text == "\xE2\x80\x98") {
-      open_single = true;
-      continue;
-    }
-    if (token.text == "\xE2\x80\x99") {
-      open_single = false;
-      continue;
-    }
-    if (token.word && (straight || open_double || open_single)) {
+  std::vector<std::string> stack;
+  for (auto& token : tokens) {
+    const auto& t = token.text;
+    if (t == "\"" || t == "'" || t == "\xE2\x80\x98" || t == "\xE2\x80\x99" || t == "\xE2\x80\x9C" || t == "\xE2\x80\x9D") {
+      if (!stack.empty() && stack.back() == t) stack.pop_back();
+      else if (t != "\xE2\x80\x99" && t != "\xE2\x80\x9D") {
+        stack.push_back(t == "\xE2\x80\x98" ? "\xE2\x80\x99" : t == "\xE2\x80\x9C" ? "\xE2\x80\x9D" : t);
+      }
       token.frozen = true;
-    }
+    } else if (!stack.empty()) token.frozen = true;
   }
 }
 
@@ -443,6 +426,8 @@ void freeze_names(std::vector<Token>& tokens) {
       continue;
     }
     const std::string low = lower_copy(token.text);
+    static const std::unordered_set<std::string_view> names = {"joy", "king", "swift", "hope", "bill", "will", "may", "rose", "grace", "faith", "summer", "chase", "grant"};
+    if (heading || (is_capitalized_word(token.text) && names.contains(low))) { token.frozen = true; continue; }
     int letters = 0;
     bool digit = false;
     bool high = false;
@@ -463,7 +448,7 @@ void freeze_names(std::vector<Token>& tokens) {
       token.frozen = true;
       continue;
     }
-    if (is_all_caps_word(token.text) && letters >= 2 && !lexicon().has_lemma(low)) {
+    if (is_all_caps_word(token.text) && letters >= 2) {
       token.frozen = true;
       continue;
     }
@@ -474,6 +459,30 @@ void freeze_names(std::vector<Token>& tokens) {
 }
 
 }  // namespace
+
+bool freeze_terms(std::vector<Token>& tokens, const std::vector<std::string>& terms) {
+  const auto text = lower_copy(concat_tokens(tokens));
+  auto word_byte = [](unsigned char c) { return is_letter(c) || (c >= '0' && c <= '9') || c >= 128 || c == '_' || c == '-' || c == '\''; };
+  bool matched = false;
+  for (const auto& raw : terms) {
+    auto term = lower_copy(raw);
+    const auto begin = term.find_first_not_of(" \t\n\r");
+    if (begin == std::string::npos) continue;
+    term = term.substr(begin, term.find_last_not_of(" \t\n\r") - begin + 1);
+    for (std::size_t pos = text.find(term); pos != std::string::npos; pos = text.find(term, pos + term.size())) {
+      const auto end = pos + term.size();
+      if ((pos && word_byte(static_cast<unsigned char>(text[pos-1]))) ||
+          (end < text.size() && word_byte(static_cast<unsigned char>(text[end])))) continue;
+      matched = true;
+      std::size_t offset = 0;
+      for (auto& token : tokens) {
+        if (offset < end && offset + token.text.size() > pos) token.frozen = true;
+        offset += token.text.size();
+      }
+    }
+  }
+  return matched;
+}
 
 void freeze_tokens(std::vector<Token>& tokens, bool protect_quotes) {
   if (protect_quotes) {
@@ -493,6 +502,7 @@ SubstituteOutcome substitute(std::vector<Token> tokens, const Options& options, 
     return outcome;
   }
 
+  const std::vector<Token> context = outcome.tokens;
   const std::vector<int> words = word_positions(outcome.tokens);
   for (int slot = 0; slot < static_cast<int>(words.size()); ++slot) {
     const std::uint64_t word_ordinal = ordinal + static_cast<std::uint64_t>(slot);
@@ -500,9 +510,11 @@ SubstituteOutcome substitute(std::vector<Token> tokens, const Options& options, 
     if (token.frozen) {
       continue;
     }
-    const std::string prev = at_slot(outcome.tokens, words, slot - 1);
-    const std::string next = at_slot(outcome.tokens, words, slot + 1);
-    const bool participle = participle_cue(prev);
+    const std::string prev = at_slot(context, words, slot - 1);
+    const std::string next = at_slot(context, words, slot + 1);
+    std::string cue = prev;
+    for (int k = slot - 2; k >= 0 && k >= slot - 5 && (is_known_adverb_word(cue) || cue == "not" || cue == "never"); --k) cue = at_slot(context, words, k);
+    const bool participle = participle_cue(cue);
     std::vector<Analysis> analyses = analyze_word(token.text, prev, participle);
     bool has_noun = false;
     bool has_verb = false;
@@ -542,19 +554,21 @@ SubstituteOutcome substitute(std::vector<Token> tokens, const Options& options, 
       continue;
     }
     const Analysis chosen = kept.front();
+    if (chosen.lemma == "however" && (static_cast<std::size_t>(words[static_cast<std::size_t>(slot)] + 1) >= outcome.tokens.size() || outcome.tokens[static_cast<std::size_t>(words[static_cast<std::size_t>(slot)] + 1)].text != ",")) continue;
+    if (chosen.pos == Pos::Adv && (chosen.lemma == "nearly" || chosen.lemma == "almost") && (next == "no" || next == "not" || next == "never")) continue;
     if (chosen.flag == "quant") {
       static const std::unordered_set<std::string_view> blocked = {"how", "too", "so", "as", "this", "that", "very"};
       if (next == "of" || next == "more" || blocked.contains(prev)) {
         continue;
       }
     }
-    if (chosen.flag == "time" && !time_context(outcome.tokens, words, slot)) {
+    if (chosen.flag == "time" && !time_context(context, words, slot)) {
       continue;
     }
     if (chosen.flag == "mass" && chosen.features.plural) {
       continue;
     }
-    if (chosen.pos == Pos::Verb && !verb_frame(chosen, outcome.tokens, words, slot, prev)) {
+    if (chosen.pos == Pos::Verb && !verb_frame(chosen, context, words, slot, prev)) {
       continue;
     }
     // "ran fast" is adverbial. "remained calm" is a real adjective and can change.
@@ -570,6 +584,9 @@ SubstituteOutcome substitute(std::vector<Token> tokens, const Options& options, 
     }
     std::vector<std::string> usable;
     for (const std::string& synonym : *synonyms) {
+      if (chosen.pos == Pos::Adj && next == "to" &&
+          (chosen.lemma == "happy" || chosen.lemma == "glad" || chosen.lemma == "pleased" || chosen.lemma == "joyful" || chosen.lemma == "cheerful") &&
+          synonym != "happy" && synonym != "glad" && synonym != "pleased") continue;
       if (const std::optional<std::string> inflected = inflect(synonym, chosen.pos, chosen.features)) {
         usable.push_back(*inflected);
       }
@@ -602,13 +619,15 @@ void fix_articles(std::vector<Token>& tokens, std::vector<Change>& changes) {
   for (int slot = 0; slot < static_cast<int>(words.size()); ++slot) {
     Token& article = tokens[static_cast<std::size_t>(words[static_cast<std::size_t>(slot)])];
     const std::string low = lower_copy(article.text);
-    if (low != "a" && low != "an") {
+    if (article.frozen || (low != "a" && low != "an")) {
       continue;
     }
     if (slot + 1 >= static_cast<int>(words.size())) {
       continue;
     }
     Token& next = tokens[static_cast<std::size_t>(words[static_cast<std::size_t>(slot + 1)])];
+    if (words[static_cast<std::size_t>(slot + 1)] != words[static_cast<std::size_t>(slot)] + 2 ||
+        !is_space_token(tokens[static_cast<std::size_t>(words[static_cast<std::size_t>(slot)] + 1)])) continue;
     if (!next.replaced && !article.replaced) {
       continue;
     }

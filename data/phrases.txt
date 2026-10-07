@@ -71,3 +71,70 @@ new york
 a bit
 a few
 no one
+
+# Fixed expressions and technical collocations: do not rewrite individual words.
+honest mistake
+honest error
+empty promise
+empty promises
+cold war
+cold shoulder
+common cold
+heavy rain
+heavy rains
+heavy metal
+strong tea
+strong coffee
+small talk
+big deal
+little to no
+little by little
+by and large
+safe and sound
+law and order
+bright and early
+quick and dirty
+slow and steady
+young and old
+high and dry
+sooner or later
+significant difference
+statistically significant
+statistical significance
+standard error
+standard errors
+confidence interval
+confidence intervals
+clinical trial
+clinical trials
+placebo effect
+side effect
+side effects
+control group
+control groups
+null hypothesis
+primary school
+secondary school
+primary key
+foreign key
+source code
+artificial intelligence
+common sense
+real estate
+make sure
+take care
+take part
+in part
+on purpose
+for good
+as usual
+no doubt
+without a doubt
+by accident
+in short
+in brief
+at present
+a little
+a great deal
+good morning
+good evening

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "internal.hpp"
+#include <unordered_set>
 
 namespace synomizer {
 namespace {
@@ -64,13 +65,16 @@ bool clause_comma(const std::vector<Token>& tokens, int index) {
 }
 
 bool range_has_verb(const std::vector<Token>& tokens, int begin, int end) {
+  bool any = false;
+  int lexical = 0;
   for (int i = begin; i < end; ++i) {
-    const Token& token = tokens[static_cast<std::size_t>(i)];
-    if (token.word && looks_like_verb_token(token.text)) {
-      return true;
-    }
+    const auto& token = tokens[static_cast<std::size_t>(i)];
+    if (!token.word || !looks_like_verb_token(token.text)) continue;
+    any = true;
+    if (!is_aux(lower_copy(token.text))) ++lexical;
   }
-  return false;
+  // More than one lexical verb may mean an embedded clause with different scope.
+  return any && lexical <= 1;
 }
 
 bool range_has_coord(const std::vector<Token>& tokens, int begin, int end) {
@@ -165,7 +169,10 @@ void decap_first(std::vector<Token>& slice) {
 bool is_manner_adverb(const Token& token) {
   const std::vector<Analysis> analyses = analyze_word(token.text, "", false);
   for (const Analysis& analysis : analyses) {
-    if (analysis.pos == Pos::Adv && analysis.flag == "manner") {
+    if (analysis.pos == Pos::Adv && analysis.flag == "manner" &&
+        (analysis.lemma == "quickly" || analysis.lemma == "rapidly" || analysis.lemma == "swiftly" ||
+         analysis.lemma == "carefully" || analysis.lemma == "cautiously" || analysis.lemma == "quietly" ||
+         analysis.lemma == "silently" || analysis.lemma == "loudly" || analysis.lemma == "noisily")) {
       return true;
     }
   }
@@ -186,12 +193,21 @@ bool has_adjective(const Token& token) {
 }
 
 bool blocked_sentence(const std::vector<Token>& tokens) {
-  for (const Token& token : tokens) {
-    if (token.text == ";" || token.text == ":") {
-      return true;
-    }
+  static const std::unordered_set<std::string_view> scope = {
+    "not", "never", "no", "neither", "nor", "only", "just", "hardly", "scarcely", "barely",
+    "if", "unless", "whether", "that", "which", "who", "whom", "whose", "where", "why", "how", "while", "to"};
+  int subordinators = 0, commas = 0;
+  for (const auto& token : tokens) {
+    const auto low = lower_copy(token.text);
+    if (scope.contains(low) || low.find("n't") != std::string::npos) return true;
+    if (low == "because" || low == "although" || low == "though" || low == "when" || low == "before" || low == "after") ++subordinators;
+    if (token.text == ",") ++commas;
+    const bool numeric = !token.text.empty() && token.text.find_first_not_of("0123456789.") == std::string::npos && token.text.find_first_of("0123456789") != std::string::npos;
+    if ((!token.word && token.frozen && !numeric) || token.text.find('\n') != std::string::npos) return true;
+    if (!token.word && token.text != "." && token.text != "," && !numeric && !is_space_token(token)) return true;
   }
-  return false;
+  // One simple main clause plus, at most, one subordinate clause.
+  return subordinators > 1 || commas > 1;
 }
 
 struct Subordinator {
@@ -436,8 +452,15 @@ std::optional<ArrangeOutcome> try_adjectives(const std::vector<Token>& tokens, c
     if (!has_adjective(tokens[static_cast<std::size_t>(left)]) || !has_adjective(tokens[static_cast<std::size_t>(right)])) {
       continue;
     }
+    if (slot > 0 && is_known_adverb_word(word_at(tokens, words[static_cast<std::size_t>(slot - 1)]))) continue;
+    bool tight = true;
+    for (int i = left + 1; i < right; ++i) {
+      if (i != mid && !is_space_token(tokens[static_cast<std::size_t>(i)])) tight = false;
+    }
+    if (!tight) continue;
     std::vector<Token> copy = tokens;
-    std::swap(copy[static_cast<std::size_t>(left)].text, copy[static_cast<std::size_t>(right)].text);
+    copy[static_cast<std::size_t>(left)].text = apply_caps(lower_copy(tokens[static_cast<std::size_t>(right)].text), tokens[static_cast<std::size_t>(left)].text);
+    copy[static_cast<std::size_t>(right)].text = apply_caps(lower_copy(tokens[static_cast<std::size_t>(left)].text), tokens[static_cast<std::size_t>(right)].text);
     return finish(std::move(copy), concat_tokens(tokens), "Swapped coordinated adjectives");
   }
   return std::nullopt;
@@ -450,6 +473,15 @@ std::optional<ArrangeOutcome> arrange_sentence(const std::vector<Token>& tokens,
     return std::nullopt;
   }
   const std::vector<int> words = word_positions(tokens);
+  // Cataphora/anaphora may change when third-person references move across clauses.
+  bool subordinate = false, third_person = false;
+  for (const auto& token : tokens) {
+    const auto w = lower_copy(token.text);
+    subordinate = subordinate || is_subordinator_word(w);
+    third_person = third_person || w == "he" || w == "she" || w == "it" || w == "they" ||
+      w == "him" || w == "her" || w == "his" || w == "them" || w == "their" || w == "its";
+  }
+  if (subordinate && third_person) return std::nullopt;
   if (auto clause = try_clause(tokens, words)) {
     return clause;
   }

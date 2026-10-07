@@ -231,3 +231,30 @@ mark {
   textarea, .revise { min-height: 16rem; }
   #changes li { grid-template-columns: 1fr; gap: 0.15rem; }
 }
+
+/* Finishing controls retain the original paper-and-ink design. */
+[hidden] { display: none !important; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button:disabled:hover { background: var(--ink); color: var(--paper); border-color: var(--line); }
+.privacy, .hint, .advanced { font-family: ui-monospace, monospace; font-size: .76rem; color: var(--faint); line-height: 1.6; }
+.privacy { margin: .9rem 0 0; }
+.advanced { margin: 1rem 0; padding: .65rem 0; border-block: 1px solid color-mix(in srgb, var(--line) 30%, transparent); }
+.advanced summary { cursor: pointer; color: var(--ink); }
+.advanced label { display: block; margin-top: .6rem; }
+#protected { min-height: 4.5rem; max-width: 42rem; margin-top: .3rem; font-family: ui-monospace, monospace; font-size: .85rem; }
+.advanced p { margin-bottom: 0; }
+.sheets > section { min-width: 0; }
+#changes li > span { min-width: 0; overflow-wrap: anywhere; }
+#export-changes, #more-changes { margin-top: .8rem; }
+#seed { width: 12.5rem; }
+#output[aria-busy="true"] { opacity: .65; }
+.skip { position: absolute; left: -10000px; }
+.skip:focus { left: 1rem; top: .4rem; padding: .5rem; background: var(--sheet); color: var(--ink); z-index: 5; }
+textarea, input, select, button { scroll-margin-top: 1rem; }
+@media (max-width: 480px) {
+  .tools { gap: .6rem; }
+  .tools label, .tools select { max-width: 100%; }
+  .tools button { min-height: 2.6rem; }
+  .sheet-head { flex-wrap: wrap; gap: .2rem; }
+  .kicker { letter-spacing: .06em; }
+}

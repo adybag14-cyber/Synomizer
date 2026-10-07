@@ -1,6 +1,21 @@
 {
   "name": "synomizer",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
-  "description": "Marks this repo as an ES module so Node can load docs/engine.js during tests. The GitHub Pages site does not use this file."
+  "license": "Apache-2.0",
+  "description": "Deterministic C++23 English rewriting and a private, static browser companion.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "build:site": "node scripts/build-site.mjs",
+    "serve": "node scripts/serve.mjs",
+    "test:web": "playwright test",
+    "test:all": "npm test && npm run test:web"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
 }

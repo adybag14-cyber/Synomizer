@@ -27,6 +27,8 @@ struct Options {
   bool synonyms = true;
   bool arrange = true;
   bool protect_quotes = true;
+  // Case-insensitive whole words/phrases; matching sentences are not rearranged.
+  std::vector<std::string> protected_terms;
 };
 
 struct Result {

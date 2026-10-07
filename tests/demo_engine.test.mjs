@@ -11,7 +11,7 @@ import test from "node:test";
 import { loadResources, rewrite } from "../docs/engine.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const binary = [process.env.SYNOMIZER_BIN, path.join(root, "build", "synomizer"), path.join(root, "build", "synomizer.exe")]
+const binary = [process.env.SYNOMIZER_BIN, path.join(root, "build", "synomizer"), path.join(root, "build", "synomizer.exe"), path.join(root, "build", "Release", "synomizer.exe")]
   .find((candidate) => candidate && existsSync(candidate));
 const resources = loadResources(
   readFileSync(path.join(root, "data", "lexicon.tsv"), "utf8"),
@@ -29,12 +29,13 @@ const paragraph =
 function native(text, options = {}) {
   const args = ["--show-changes", "--seed", String(options.seed ?? 1), "--intensity", String(options.intensity ?? 1)];
   if (options.synonyms === false && options.arrange === false) {
-    args.push("--synonyms-only", "--arrange-only");
+    args.push("--no-rewrite");
   } else if (options.synonyms === false) {
     args.push("--arrange-only");
   } else if (options.arrange === false) {
     args.push("--synonyms-only");
   }
+  for (const term of options.protectedTerms || []) args.push("--protect", term);
   if (options.protectQuotes === false) {
     args.push("--vary-quotes");
   }

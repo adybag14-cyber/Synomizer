@@ -25,10 +25,10 @@ Result rewrite(std::string_view input, const Options& options) {
 
   std::string text;
   text.reserve(input.size());
-  for (char c : input) {
-    if (c != '\r') {
-      text.push_back(c);
-    }
+  for (std::size_t i = 0; i < input.size(); ++i) {
+    if (input[i] == '\r') {
+      if (i + 1 == input.size() || input[i + 1] != '\n') text.push_back('\n');
+    } else text.push_back(input[i]);
   }
 
   Result result;
@@ -40,7 +40,8 @@ Result rewrite(std::string_view input, const Options& options) {
     }
     std::vector<Token> tokens = std::move(piece.tokens);
     freeze_tokens(tokens, settings.protect_quotes);
-    if (std::optional<ArrangeOutcome> arranged = arrange_sentence(tokens, settings.arrange)) {
+    const bool locked = freeze_terms(tokens, settings.protected_terms);
+    if (std::optional<ArrangeOutcome> arranged = arrange_sentence(tokens, settings.arrange && !locked)) {
       tokens = std::move(arranged->tokens);
       result.changes.push_back(std::move(arranged->change));
     }
