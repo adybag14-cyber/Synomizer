@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 const SAMPLE = "The careful teacher helped the happy children. Because the weather was cold, the class started the project late. She quietly explained the main idea, and the students were glad to assist. They purchased a small car for the school trip and quickly found the correct route. The calm physician said the tired boy was healthy. Although the journey was long, the group remained cheerful. The writer described the final result in an honest report. The crowd was silent when the meeting ended. The local students found a useful answer and remained calm. It was a small victory.";
 
-const VERSION = "1.2.0";
+const VERSION = "1.2.1";
 const $ = (selector) => document.querySelector(selector);
 const source = $("#source"), status = $("#status"), banner = $("#banner");
 const changes = $("#changes"), seed = $("#seed"), intensity = $("#intensity"), grid = $("#variations");
 const cards = [...document.querySelectorAll(".variant-card")];
+const PROFILE_NAMES = { balanced: "Balanced", close: "Light touch", recast: "Restructured" };
 const MAX = 200_000, MAX_SEED = (1n << 64n) - 1n;
 let worker, ready = false, busy = false, revision = 0, running = null, pending = false;
 let timer, deadline, latest = null, ledgerLimit = 250;
@@ -28,6 +29,7 @@ function clearResults() {
   latest = null;
   cards.forEach((card, index) => {
     card.hidden = index !== 0; card.classList.toggle("is-selected", index === 0);
+    card.querySelector(".variant-output").id = index === 0 ? "output" : `output-${index+1}`;
     card.querySelector(".variant-output").replaceChildren();
     card.querySelector(".variant-stats").textContent = "";
     card.querySelector(".variant-options").textContent = "";
@@ -80,7 +82,7 @@ function renderLedger() {
 function select(index) {
   if (!current(index)) return;
   latest.selected = index;
-  cards.forEach((card, i) => { card.classList.toggle("is-selected", i === index); card.querySelector("input").checked = i === index; });
+  cards.forEach((card, i) => { card.classList.toggle("is-selected", i === index); card.querySelector("input").checked = i === index; card.querySelector(".variant-output").id = i === index ? "output" : `output-${i+1}`; });
   ledgerLimit = 250; renderLedger(); exportsEnabled(true);
 }
 function render(batch, request) {
@@ -99,7 +101,8 @@ function render(batch, request) {
     const phrases = result.changes.filter((c) => c.kind === "phrase").length;
     const moves = result.changes.filter((c) => c.kind === "arrangement").length;
     card.querySelector(".variant-stats").textContent = `${wordCount(result.text).toLocaleString()} words / ${synonyms} synonyms / ${moves} moves / ${phrases} phrases`;
-    card.querySelector(".variant-options").textContent = `seed ${options.seed} / ${options.density}% edit rate / ${options.arrange ? (options.mixedMoves ? "some eligible moves" : "eligible moves") : "original order"}${result.text.length > 50000 ? " / highlights off for long text" : ""}`;
+    card.querySelector("h3").textContent = `Variation ${index+1}: ${PROFILE_NAMES[options.style]}`;
+    card.querySelector(".variant-options").textContent = `seed ${options.seed} / ${options.style === "close" ? "lighter word changes, original order" : options.arrange ? "eligible sentence moves" : "original order"}${result.text.length > 50000 ? " / highlights off for long text" : ""}`;
   });
   grid.dataset.count = String(batch.variations.length);
   const changed = batch.variations.filter((v) => v.result.text !== request.text.replace(/\r\n?/g, "\n")).length;
@@ -199,7 +202,7 @@ function download(text, name, type) {
   const link = document.createElement("a"); link.href = url; link.download = name;
   document.body.append(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-function report(variant) { return { version: VERSION, options: variant.options, text: variant.result.text, changes: variant.result.changes }; }
+function report(variant) { return { version: VERSION, seed: variant.options.seed, style: variant.options.style, options: variant.options, text: variant.result.text, changes: variant.result.changes }; }
 function saveText(index = latest?.selected, name = "synomizer-rewrite.txt") {
   const variant = current(index); if (variant) download(variant.result.text, name, "text/plain;charset=utf-8");
 }
@@ -213,8 +216,8 @@ $("#export-all").addEventListener("click", () => {
   if (!current()) return;
   const { batch } = latest;
   download(JSON.stringify({ version: VERSION, original: latest.original, baseOptions: latest.baseOptions,
-    requested: batch.requested, candidatesConsidered: batch.candidatesConsidered,
-    variations: batch.variations.map(report) }, null, 2)+"\n", "synomizer-variations.json", "application/json");
+    requested: batch.requested, attempts: batch.candidatesConsidered, selected: latest.selected+1,
+    variants: batch.variations.map(report) }, null, 2)+"\n", "synomizer-variations.json", "application/json");
 });
 grid.addEventListener("change", (event) => {
   if (event.target.matches("input[data-select]")) select(Number(event.target.dataset.select));

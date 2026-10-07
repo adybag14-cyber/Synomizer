@@ -139,27 +139,60 @@ a great deal
 good morning
 good evening
 
+# Polysemy, idioms, and discipline-specific collocations.
+a little
+little by little
+small talk
+big deal
+strong coffee
+strong tea
+heavy rain
+heavy traffic
+cold war
+cold shoulder
+cold feet
+catch a cold
+caught a cold
+ill effects
+ill effect
+sick joke
+sick jokes
+emotional baggage
+dilated pupils
+pupils dilated
+doctor of philosophy
+doctor of medicine
+mathematical proof
+statistical power
+statistical significance
+significant figures
+false positive
+false negative
+empty promise
+empty promises
+breaking news
+common sense
+common law
+short circuit
+short circuits
+short of breath
+short of money
+
+for this reason
+at the present time
+in spite of
 complete blood count
 complete blood counts
-common cold
-common law
 civil law
 powerful evidence
 strong evidence
 weak evidence
-false positive
 false positives
-false negative
 false negatives
 random variable
 random variables
 normal distribution
 normal distributions
-confidence interval
-confidence intervals
-significant figures
-standard error
-standard errors
 standard deviation
 standard deviations
 rate of change
@@ -170,15 +203,11 @@ orders of magnitude
 big bang
 small intestine
 large intestine
-little by little
 large language model
 large language models
 quiet period
-short circuit
-short circuits
 short term
 long term
-heavy metal
 heavy metals
 wide angle
 partial derivative
@@ -187,7 +216,6 @@ final exam
 final exams
 final examination
 final examinations
-
 ill will
 in good faith
 in bad faith

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Synomizer VERSION 1.2.0 LANGUAGES CXX)
+project(Synomizer VERSION 1.2.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -46,8 +46,9 @@ add_library(synomizer-lib STATIC
   src/arrange.cpp
   src/substitute.cpp
   src/engine.cpp
-  src/variations.cpp
+  src/variants.cpp
   src/phrases.cpp
+  src/adjuncts.cpp
 )
 target_include_directories(synomizer-lib
   PUBLIC include
@@ -99,14 +100,14 @@ set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
 set(CPACK_GENERATOR "ZIP;TGZ")
 include(CPack)
 
-add_executable(synomizer-variation-tests tests/test_variations.cpp)
-target_link_libraries(synomizer-variation-tests PRIVATE synomizer-lib)
+add_executable(synomizer-variant-tests tests/test_variants.cpp)
+target_link_libraries(synomizer-variant-tests PRIVATE synomizer-lib)
 if(MSVC)
-  target_compile_options(synomizer-variation-tests PRIVATE /W4 /permissive- /Zc:__cplusplus /EHsc /utf-8)
+  target_compile_options(synomizer-variant-tests PRIVATE /W4 /permissive- /Zc:__cplusplus /EHsc /utf-8)
 else()
-  target_compile_options(synomizer-variation-tests PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(synomizer-variant-tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 if(MINGW)
-  target_link_options(synomizer-variation-tests PRIVATE -static -static-libgcc -static-libstdc++)
+  target_link_options(synomizer-variant-tests PRIVATE -static -static-libgcc -static-libstdc++)
 endif()
-add_test(NAME variation-api COMMAND synomizer-variation-tests)
+add_test(NAME variants COMMAND synomizer-variant-tests)

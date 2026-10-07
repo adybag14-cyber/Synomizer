@@ -4,9 +4,6 @@
 #include "internal.hpp"
 
 #include <utility>
-#include <algorithm>
-#include <stdexcept>
-#include <unordered_set>
 
 namespace synomizer {
 
@@ -19,7 +16,6 @@ std::string_view version() noexcept {
 
 Result rewrite(std::string_view input, const Options& options) {
   Options settings = options;
-  settings.density = std::clamp(settings.density, 0, 100);
   if (settings.intensity < 0) {
     settings.intensity = 0;
   }
@@ -43,14 +39,18 @@ Result rewrite(std::string_view input, const Options& options) {
       continue;
     }
     std::vector<Token> tokens = std::move(piece.tokens);
-    freeze_tokens(tokens, settings.protect_quotes);
+    freeze_tokens(tokens, settings.protect_quotes, settings.style == Style::Recast && settings.synonyms && settings.intensity > 0);
     const bool locked = freeze_terms(tokens, settings.protected_terms);
-    if (std::optional<ArrangeOutcome> arranged = arrange_sentence(tokens, settings.arrange && !locked && (!settings.mixed_moves || ((settings.seed ^ ordinal) % 3 != 0)), settings.seed)) {
+    if (!locked) {
+      auto adjuncts = rephrase(tokens, settings, ordinal);
+      result.changes.insert(result.changes.end(), adjuncts.begin(), adjuncts.end());
+      vary_phrases(tokens, settings, result.changes);
+    }
+    if (settings.style == Style::Recast) protect_remaining_phrases(tokens);
+    if (std::optional<ArrangeOutcome> arranged = arrange_sentence(tokens, settings.arrange && !locked && settings.style != Style::Close, settings.style == Style::Recast, settings.seed)) {
       tokens = std::move(arranged->tokens);
       result.changes.push_back(std::move(arranged->change));
     }
-    auto phrases = rephrase(tokens, settings, ordinal);
-    result.changes.insert(result.changes.end(), phrases.begin(), phrases.end());
     SubstituteOutcome substituted = substitute(std::move(tokens), settings, ordinal);
     ordinal = substituted.next_ordinal;
     fix_articles(substituted.tokens, substituted.changes);

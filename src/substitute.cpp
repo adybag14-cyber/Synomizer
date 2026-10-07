@@ -84,7 +84,7 @@ bool intensity_allows(int intensity, Pos pos, std::string_view flag) {
     return intensity >= 2;
   }
   if (intensity <= 0) {
-    if (pos == Pos::Adj && (flag == "free" || flag == "time" || flag == "quant")) {
+    if (pos == Pos::Adj && (flag == "free" || flag == "time" || flag == "quant" || flag.starts_with("head:"))) {
       return true;
     }
     return pos == Pos::Adv && flag == "manner";
@@ -357,6 +357,58 @@ int score_analysis(const Analysis& analysis, const std::string& prev, const std:
   return score;
 }
 
+
+bool context_allows(const Analysis& chosen, const std::vector<Token>& tokens, const std::vector<int>& words, int slot) {
+  const auto prev = at_slot(tokens, words, slot-1);
+  const auto next = at_slot(tokens, words, slot+1);
+  auto head_after = [&]() {
+    for (int k=slot+1; k < static_cast<int>(words.size()) && k <= slot+5; ++k) {
+      // Do not infer grammatical context across punctuation or opaque spans.
+      if (words[static_cast<std::size_t>(k)] != words[static_cast<std::size_t>(k-1)]+2 ||
+          !is_space_token(tokens[static_cast<std::size_t>(words[static_cast<std::size_t>(k)]-1)])) return std::string{};
+      const auto w=at_slot(tokens,words,k);
+      if (k == slot+1 && chosen.pos == Pos::Verb && is_determiner(w)) continue;
+      if (known_adjective(w) || is_known_adverb_word(w)) continue;
+      return w;
+    }
+    return std::string{};
+  };
+  const auto head = head_after();
+  if (chosen.flag.starts_with("head:") || chosen.flag.starts_with("object:")) {
+    const auto allowed = std::string("|") + chosen.flag.substr(chosen.flag.find(':')+1) + '|';
+    if (head.empty() || allowed.find("|"+head+"|") == std::string::npos) return false;
+  }
+  const auto& lemma = chosen.lemma;
+  if (chosen.pos == Pos::Adj) {
+    if (is_determiner(next)) return false; // 'Please complete the task' is not adjectival.
+    if (lemma == "chief" && !known_noun(next)) return false;
+    if (lemma == "cold" && (prev == "a" || prev == "the") && !known_noun(next)) return false;
+    if (lemma == "little" && (next.empty() || next == "of" || next == "more" || next == "less")) return false;
+  }
+  if (chosen.pos == Pos::Noun) {
+    if ((lemma == "objective" || lemma == "individual") && known_noun(next)) return false;
+    if (lemma == "doctor" && (next == "of" || head == "philosophy")) return false;
+    if (lemma == "pupil") for (int k=std::max(0,slot-3); k<std::min(static_cast<int>(words.size()),slot+4); ++k) {
+      const auto w=at_slot(tokens,words,k);
+      if (w == "eye" || w == "eyes" || w == "dilated" || w == "dilation" || w == "iris" || w == "retina") return false;
+    }
+  }
+  if (chosen.pos == Pos::Verb) {
+    std::string cue=prev;
+    for (int k=slot-2; k>=0 && k>=slot-5 && (is_known_adverb_word(cue) || is_negation(cue)); --k) cue=at_slot(tokens,words,k);
+    if (lemma=="show" && chosen.features.participle && be_form(cue)) return false;
+    if ((lemma == "help" || lemma == "assist" || lemma == "aid") && next == "to") return false;
+    if ((lemma == "find" || lemma == "locate") && (next == "that" || next == "whether" || next == "why" || next == "how")) return false;
+    if ((lemma == "decline" || lemma == "refuse") && head.empty() && next != "to") return false;
+    if (lemma == "eat" || lemma == "consume") {
+      static const std::unordered_set<std::string_view> food = {"food","meal","meals","breakfast","lunch","dinner","cake","sandwich","bread","pizza","apple","apples","rice","snack","snacks","fish","beef","fruit","vegetables","soup"};
+      if (!food.contains(head)) return false;
+    }
+    if (lemma == "recall" && (head == "product" || head == "products" || head == "vehicles" || head == "drug" || head == "drugs")) return false;
+  }
+  return true;
+}
+
 std::string with_possessive(std::string word, bool possessive) {
   if (!possessive || word.empty()) {
     return word;
@@ -383,15 +435,14 @@ void freeze_quotes(std::vector<Token>& tokens) {
   }
 }
 
-void freeze_phrases(std::vector<Token>& tokens) {
+void freeze_phrases(std::vector<Token>& tokens, bool variation) {
   const std::vector<int> words = word_positions(tokens);
-  const auto& phrases = lexicon().phrases();
   std::vector<bool> used(words.size(), false);
   for (int slot = 0; slot < static_cast<int>(words.size()); ++slot) {
     if (used[static_cast<std::size_t>(slot)]) {
       continue;
     }
-    for (const std::vector<std::string>& phrase : phrases) {
+    for (const auto& phrase : lexicon().phrases_starting(at_slot(tokens, words, slot), variation)) {
       if (slot + static_cast<int>(phrase.size()) > static_cast<int>(words.size())) {
         continue;
       }
@@ -509,11 +560,13 @@ bool freeze_terms(std::vector<Token>& tokens, const std::vector<std::string>& te
   return matched;
 }
 
-void freeze_tokens(std::vector<Token>& tokens, bool protect_quotes) {
+void protect_remaining_phrases(std::vector<Token>& tokens) { freeze_phrases(tokens, false); }
+
+void freeze_tokens(std::vector<Token>& tokens, bool protect_quotes, bool phrase_variation) {
   if (protect_quotes) {
     freeze_quotes(tokens);
   }
-  freeze_phrases(tokens);
+  freeze_phrases(tokens, phrase_variation);
   freeze_names(tokens);
 }
 
@@ -611,7 +664,7 @@ SubstituteOutcome substitute(std::vector<Token> tokens, const Options& options, 
     }
     if (chosen.flag == "disagreement" && chosen.lemma != "quarrel" &&
         prev != "heated" && prev != "bitter" && prev != "verbal" && prev != "petty" && prev != "protracted") continue;
-
+    if (!context_allows(chosen, context, words, slot)) continue;
     if (chosen.lemma == "however" && (static_cast<std::size_t>(words[static_cast<std::size_t>(slot)] + 1) >= outcome.tokens.size() || outcome.tokens[static_cast<std::size_t>(words[static_cast<std::size_t>(slot)] + 1)].text != ",")) continue;
     if (chosen.pos == Pos::Adv && (chosen.lemma == "nearly" || chosen.lemma == "almost") && (next == "no" || next == "not" || next == "never")) continue;
     if (chosen.flag == "quant") {
@@ -654,6 +707,14 @@ SubstituteOutcome substitute(std::vector<Token> tokens, const Options& options, 
       if (chosen.pos == Pos::Adj && next == "to" &&
           (chosen.lemma == "happy" || chosen.lemma == "glad" || chosen.lemma == "pleased" || chosen.lemma == "joyful" || chosen.lemma == "cheerful") &&
           synonym != "happy" && synonym != "glad" && synonym != "pleased") continue;
+      if (chosen.pos == Pos::Adj && next == "to" &&
+          (chosen.lemma == "likely" || chosen.lemma == "unlikely" || chosen.lemma == "probable" ||
+           chosen.lemma == "improbable" || chosen.lemma == "eager" || chosen.lemma == "enthusiastic")) continue;
+      if (chosen.pos == Pos::Adj && (is_determiner(prev) || known_noun(next)) &&
+          (synonym == "afraid" || synonym == "aware" || synonym == "unwell")) continue;
+      if (chosen.pos == Pos::Adj && next == "to" &&
+          (chosen.lemma == "happy" || chosen.lemma == "glad" || chosen.lemma == "pleased" || chosen.lemma == "joyful" || chosen.lemma == "cheerful") &&
+          synonym != "happy" && synonym != "glad" && synonym != "pleased") continue;
       if (const std::optional<std::string> inflected = inflect(synonym, chosen.pos, chosen.features)) {
         usable.push_back(*inflected);
       }
@@ -663,8 +724,8 @@ SubstituteOutcome substitute(std::vector<Token> tokens, const Options& options, 
     }
     const std::uint64_t mixed =
         mix64(options.seed ^ ((word_ordinal + 1) * 0xD1B54A32D192ED03ull) ^ fnv1a(chosen.lemma));
-    if (options.density <= 0 || (options.density < 100 &&
-        mix64(mixed ^ 0xA0761D6478BD642Full) % 100 >= static_cast<std::uint64_t>(options.density))) continue;
+    // A separate, stable hash controls edit density; synonym choice keeps its seed.
+    if (options.style == Style::Close && mix64(mixed ^ 0xA0761D6478BD642Full) % 100 >= 50) continue;
     const std::string& picked = usable[static_cast<std::size_t>(mixed % usable.size())];
     std::string surface = apply_caps(with_possessive(picked, chosen.features.possessive), token.text);
     if (lower_copy(surface) == lower_copy(token.text)) {

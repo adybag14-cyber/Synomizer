@@ -18,6 +18,8 @@ struct VerbForms {
 };
 
 constexpr VerbForms k_verbs[] = {
+    {"keep", "keeps", "kept", "kept", "keeping"},
+    {"show", "shows", "showed", "shown", "showing"},
     {"buy", "buys", "bought", "bought", "buying"},
     {"find", "finds", "found", "found", "finding"},
     {"eat", "eats", "ate", "eaten", "eating"},

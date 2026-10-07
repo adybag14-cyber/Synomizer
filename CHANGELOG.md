@@ -1,28 +1,26 @@
 # Changelog
 
+## 1.2.1 - 2026-10-07
+
+- Reconcile the parallel three-result implementation with merged 1.2.0, preserving `Style`, `rewrite_variants`, `--variants`, `--style`, audited head/object contexts, phrase indexes, transition rules and existing regression coverage.
+- Show complete text in all three simultaneous cards; provide independent copy/text/JSON downloads and selection-specific full ledgers. Add complete reproduction options to downloaded results while retaining the batch export keys.
+- Strengthen obsolete-worker cancellation and all-card stale-export protection. Bound long-text highlight/ledger rendering without truncating result text or exported changes.
+- Add 23 shared, position- and intensity-guarded manner/frequency adjunct rules; preserve Light touch's no-phrase/no-rearrangement behaviour.
+- Extend Recast medial-adverb movement to supported simple noun-subject clauses, with seeded front/end placement and independent positive/negative regressions.
+- Expand analytic comparative forms, fix singular/plural aircraft selection using explicit number cues, and add guards for help complements, propose-to, try senses, recalls, intransitive decline, noun/verb ambiguity, nominal adjectives, quantity-little and logical arguments.
+- Add event-object vocabulary and technical/fixed-expression protections without weakening the merged head/object restrictions.
+- Retain and port both three-result UI test suites; add independent all-candidate grammar/phrase assertions and native bounded stress checks. Include the new dictionary in all ten fingerprinted deployment assets.
+- Preserve the original Apache-2.0 licence and local-only text processing.
+
 ## 1.2.0 - 2026-10-07
 
-### Three simultaneous variations
-
-- Generate up to three distinct results from an unchanged original in both C++ and JavaScript. Search at most twelve seeded candidates without escalating intensity or relaxing protections.
-- Remove exact duplicate and unchanged padding. Keep the changed base result first and select alternatives for lexical bigram diversity, without asserting a semantic-quality score.
-- Add three responsive result cards, independent copy/text/JSON exports, selection with a matching ledger, and a complete batch export including the original and exact reproduction options.
-- Add `rewrite_variations`, `--variants`, `--density` and `--mixed-moves`. Preserve the existing single-result format when `--variants` is absent.
-- Terminate obsolete searches on edits, ignore retired worker messages and disable every stale export. Long results retain full text with bounded highlight and ledger rendering.
-
-### Stronger engine
-
-- Add 23 shared phrase rules for guarded manner/frequency adjuncts, with explicit intensity, phrase boundaries, scope checks and independent change records.
-- Add a seed-selectable pre-verbal manner-adverb move for simple clauses.
-- Retain comparative and superlative degree with curated analytic forms, and handle invariant aircraft plurals with explicit number cues.
-- Expand curated vocabulary and event-object verb substitutions. Strengthen help-complement, propose-to, try/attempt, decline, recall, predicative-adjective, logical-argument, nominal-adjective, quantity-little and noun/verb context checks.
-- Expand protected technical and fixed expressions. Index lexicon lookups and stop copying/sorting protected phrases on each sentence.
-
-### Validation
-
-- Add direct native API invariants and bounded stress tests, full batch parity and replay tests, positive/negative grammar and phrase cases, and all three-result browser workflows.
-- Retain cross-platform native, sanitizer and four-browser deployment gates. Fingerprint the phrase-rewrite table in the exact browser-tested Pages artifact.
-- Preserve the original Apache-2.0 licence and local-only browser text processing.
+- Offer three simultaneous Balanced, Light touch and Restructured candidates with selection-specific text, ledger, copy/download and complete batch JSON export.
+- Generate candidates from the original using bounded, deterministic profile/diversity search, exact deduplication and honest fewer-result handling. Never relax protection or intensity to fill a quota.
+- Add the C++ `rewrite_variants` API and CLI `--variants` / `--style`, recording reproducible unsigned 64-bit seeds and profiles.
+- Add audited head/object-context vocabulary, phrase alternatives, guarded medial manner-adverb moves, comparative phrases and irregular verb/invariant plural support.
+- Guard food/non-food consumption, passive beneficiary frames, infinitival help, academic doctor and anatomical pupil senses; protect additional idioms and technical collocations. Remove the unsound recently/lately interchange.
+- Index native lexical and native/browser phrase lookups, fast-path disabled/single-result batches, and use a smaller deterministic candidate budget for long passages. Cancel obsolete workers and explicitly cap only card previews rather than exported text.
+- Add batch parity, independent grammar/preservation assertions, native API compatibility, lexicon schema and cross-browser selection/export regressions. Preserve the 1.1.1 CI/deployment verification and Apache-2.0 licence.
 
 ## 1.1.1 — 2026-10-07
 

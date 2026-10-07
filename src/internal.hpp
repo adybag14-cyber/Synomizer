@@ -10,8 +10,8 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <unordered_map>
 #include <vector>
+#include <unordered_map>
 
 namespace synomizer {
 
@@ -148,6 +148,9 @@ class Lexicon {
   [[nodiscard]] std::optional<Analysis> find(std::string_view lemma, Pos pos) const;
   [[nodiscard]] std::vector<Analysis> entries_for(std::string_view lemma) const;
   [[nodiscard]] const std::vector<std::vector<std::string>>& phrases() const;
+  [[nodiscard]] const std::vector<std::vector<std::string>>& phrases_starting(std::string_view first, bool allow_variation) const;
+  struct PhraseRule { std::string mode; std::vector<std::string> forms; };
+  std::vector<PhraseRule> phrase_rules;
 
   void add(Analysis entry, std::vector<std::string> synonyms);
   void add_phrase(std::vector<std::string> phrase);
@@ -159,9 +162,9 @@ class Lexicon {
     std::vector<std::string> synonyms;
   };
   std::vector<Row> rows_;
-  std::unordered_map<std::string, std::size_t> index_;
   std::unordered_map<std::string, std::vector<std::size_t>> by_lemma_;
   std::vector<std::vector<std::string>> phrases_;
+  std::unordered_map<std::string, std::vector<std::vector<std::string>>> phrases_by_first_, fixed_phrases_by_first_;
 };
 
 [[nodiscard]] const Lexicon& lexicon();
@@ -192,11 +195,13 @@ struct ArrangeOutcome {
   Change change;
 };
 
-[[nodiscard]] std::optional<ArrangeOutcome> arrange_sentence(const std::vector<Token>& tokens, bool enabled, std::uint64_t seed = 1);
+[[nodiscard]] std::optional<ArrangeOutcome> arrange_sentence(const std::vector<Token>& tokens, bool enabled, bool extended = false, std::uint64_t seed = 1);
+void vary_phrases(std::vector<Token>& tokens, const Options& options, std::vector<Change>& changes);
+void protect_remaining_phrases(std::vector<Token>& tokens);
 
 [[nodiscard]] bool freeze_terms(std::vector<Token>& tokens, const std::vector<std::string>& terms);
 
-void freeze_tokens(std::vector<Token>& tokens, bool protect_quotes);
+void freeze_tokens(std::vector<Token>& tokens, bool protect_quotes, bool phrase_variation = false);
 
 struct SubstituteOutcome {
   std::vector<Token> tokens;
@@ -209,7 +214,6 @@ struct SubstituteOutcome {
 
 [[nodiscard]] std::vector<Change> rephrase(std::vector<Token>& tokens,
     const Options& options, std::uint64_t ordinal);
-
 void fix_articles(std::vector<Token>& tokens, std::vector<Change>& changes);
 
 [[nodiscard]] std::string concat_tokens(const std::vector<Token>& tokens);

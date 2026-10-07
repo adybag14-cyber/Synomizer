@@ -3,7 +3,7 @@
 import { test, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { readFile as readAsync } from "node:fs/promises";
-import { loadResources, rewrite, rewriteVariations } from "../../docs/engine.js";
+import { loadResources, rewrite, rewriteVariants } from "../../docs/engine.js";
 const resources = loadResources(...["lexicon.tsv", "phrases.txt", "rephrases.tsv"].map((name) =>
   readFileSync(new URL(`../../data/${name}`, import.meta.url), "utf8")));
 const card = (page, index) => page.locator(`.variant-card[data-index="${index}"]`);
@@ -40,13 +40,13 @@ test("three complete cards are simultaneous, distinct and derived from the uncha
   const original = await page.locator("#source").inputValue();
   const texts = await page.locator(".variant-output").allTextContents();
   expect(new Set(texts).size).toBe(3);
-  const expected = rewriteVariations(original, {}, resources);
-  expect(texts).toEqual(expected.variations.map((v) => v.result.text));
+  const expected = rewriteVariants(original, {}, resources);
+  expect(texts).toEqual(expected.variants.map((v) => v.result.text));
   const report = await exportBatch(page);
-  expect(report.original).toBe(original); expect(report.variations).toHaveLength(3);
-  expect(report.candidatesConsidered).toBeLessThanOrEqual(12);
+  expect(report.original).toBe(original); expect(report.variants).toHaveLength(3);
+  expect(report.attempts).toBeLessThanOrEqual(12);
   for (let i = 0; i < 3; i++) {
-    const variant = report.variations[i];
+    const variant = report.variants[i];
     expect(variant.text).toBe(texts[i]);
     const replay = rewrite(original, variant.options, resources);
     expect(replay.text).toBe(variant.text); expect(replay.changes).toEqual(variant.changes);
@@ -80,13 +80,13 @@ test("choosing a card switches the shared ledger and selected exports but never 
     await page.getByRole("radio", { name: `Select variation ${i+1}`, exact: true }).check();
     await expect(card(page, i)).toHaveClass(/is-selected/);
     await expect(page.locator("#ledger-choice")).toContainText(`variation ${i+1}`);
-    const itemCount = batch.variations[i].changes.length;
+    const itemCount = batch.variants[i].changes.length;
     await expect(page.locator("#changes li")).toHaveCount(Math.min(itemCount, 250));
     await page.locator("#copy").click();
-    expect(await page.evaluate(() => window.__copied)).toBe(batch.variations[i].text);
+    expect(await page.evaluate(() => window.__copied)).toBe(batch.variants[i].text);
     const selected = JSON.parse((await download(page, page.locator("#export-changes"))).text);
-    expect(selected).toEqual(batch.variations[i]);
-    const text = await download(page, page.locator("#download")); expect(text.text).toBe(batch.variations[i].text);
+    expect(selected).toEqual(batch.variants[i]);
+    const text = await download(page, page.locator("#download")); expect(text.text).toBe(batch.variants[i].text);
     await expect(page.locator("#source")).toHaveValue(original);
   }
   await card(page, 2).locator('[data-action="review"]').click();
@@ -99,8 +99,8 @@ test("unknown, one-choice and fully protected passages do not pretend to have th
   for (const text of ["xyzzy", "car", '"The happy child bought a car."']) {
     await input(page, text);
     await expect(page.locator(".variant-card:visible")).toHaveCount(1);
-    const batch = await exportBatch(page); expect(batch.variations).toHaveLength(1);
-    expect(batch.variations[0].text).toBe(text === "car" ? "automobile" : text);
+    const batch = await exportBatch(page); expect(batch.variants).toHaveLength(1);
+    expect(batch.variants[0].text).toBe(text === "car" ? "automobile" : text);
     await expect(page.locator("#variation-summary")).toContainText(text === "car" ? "1 distinct rewrite" : "No eligible rewrite");
   }
   await page.locator("#clear").click();
@@ -116,8 +116,8 @@ test("all alternatives respect names, phrases, quotations and intensity without 
   const original = 'The happy teacher worked in a careful manner. The original brand was reliable. She said "The happy child." Visit https://happy.example/car. A healthy child was cheerful.';
   await input(page, original);
   const report = await exportBatch(page);
-  expect(report.variations).toHaveLength(3);
-  for (const v of report.variations) {
+  expect(report.variants).toHaveLength(3);
+  for (const v of report.variants) {
     for (const value of ["in a careful manner", "original brand", '"The happy child."', "https://happy.example/car", "healthy"]) expect(v.text).toContain(value);
     expect(v.options.intensity).toBe(0); expect(v.options.protectQuotes).toBe(true);
     expect(v.options.protectedTerms).toEqual(["in a careful manner", "original brand"]);
@@ -140,7 +140,7 @@ test("an invalid or superseded request clears every card export, not just the se
   await expect(page.locator("#output")).toHaveText("A uniquely xyzzy sentence.");
   await expect(page.locator(".variant-card:visible")).toHaveCount(1);
   const batch = await exportBatch(page);
-  expect(batch.original).toBe("A uniquely xyzzy sentence."); expect(batch.variations[0].text).toBe(batch.original);
+  expect(batch.original).toBe("A uniquely xyzzy sentence."); expect(batch.variants[0].text).toBe(batch.original);
 });
 
 test("overlapping new sets use the newest source and exact seed including uint64 wrap", async ({ page }) => {
@@ -150,12 +150,12 @@ test("overlapping new sets use the newest source and exact seed including uint64
   await expect(page.locator("#status")).toContainText("seed 18446744073709551615");
   let batch = await exportBatch(page);
   expect(batch.baseOptions.seed).toBe("18446744073709551615");
-  expect(batch.variations[0].options.seed).toBe("18446744073709551615");
+  expect(batch.variants[0].options.seed).toBe("18446744073709551615");
   await page.locator("#variant").click();
   await expect(page.locator("#status")).toContainText("seed 0");
   batch = await exportBatch(page);
   expect(batch.baseOptions.seed).toBe("0");
-  for (const variant of batch.variations) expect(rewrite(original, variant.options, resources).text).toBe(variant.text);
+  for (const variant of batch.variants) expect(rewrite(original, variant.options, resources).text).toBe(variant.text);
   await expect(page.locator("#source")).toHaveValue(original);
 });
 
@@ -175,10 +175,10 @@ test("phrase and arrangement changes survive round-trip export for each chosen r
   const original = "She worked in a careful manner. On a daily basis, she studied. The teacher carefully examined the report. She is happier today.";
   await input(page, original);
   const batch = await exportBatch(page);
-  expect(batch.variations).toHaveLength(3);
-  expect(batch.variations[0].changes.some((c) => c.kind === "phrase")).toBe(true);
-  expect(batch.variations[0].changes.some((c) => c.kind === "arrangement")).toBe(true);
-  for (const v of batch.variations) expect(rewrite(original, v.options, resources).changes).toEqual(v.changes);
+  expect(batch.variants).toHaveLength(3);
+  expect(batch.variants[0].changes.some((c) => c.kind === "phrase")).toBe(true);
+  expect(batch.variants.some((v) => v.changes.some((c) => c.kind === "arrangement"))).toBe(true);
+  for (const v of batch.variants) expect(rewrite(original, v.options, resources).changes).toEqual(v.changes);
 });
 
 test("all cards safely display markup as text", async ({ page }) => {
@@ -220,14 +220,14 @@ test("choosing and exporting each long result retains complete logs with bounded
   await expect(page.locator("#status")).toContainText("seed 1");
   await expect(page.locator("#export-all")).toBeEnabled();
   const batch = await exportBatch(page);
-  expect(batch.variations).toHaveLength(3);
+  expect(batch.variants).toHaveLength(3);
   for (let i = 0; i < 3; i++) {
     await page.getByRole("radio", { name: `Select variation ${i+1}`, exact: true }).check();
     await expect(page.locator("#changes li")).toHaveCount(250);
     await page.locator("#more-changes").click();
     await expect(page.locator("#changes li")).toHaveCount(500);
     const report = JSON.parse((await download(page, page.locator("#export-changes"))).text);
-    expect(report).toEqual(batch.variations[i]);
+    expect(report).toEqual(batch.variants[i]);
     expect(report.text.split("\n\n")).toHaveLength(2001);
     expect(report.changes.length).toBeGreaterThan(500);
   }

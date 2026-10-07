@@ -80,6 +80,10 @@ void load_line(Lexicon& lex, std::string_view line) {
     return;
   }
   const std::string flag = cols.size() >= 4 && !cols[3].empty() ? cols[3] : "free";
+  if (cols[0] == "@phrase") {
+    lex.phrase_rules.push_back({cols[1], split_char(cols[2], '|')});
+    return;
+  }
   if (cols[0] == "@group") {
     const auto pos = parse_pos(cols[1]);
     if (!pos) {
@@ -140,47 +144,79 @@ Lexicon build_lexicon() {
 
 }  // namespace
 
-namespace {
-std::string row_key(std::string_view lemma, Pos pos) {
-  std::string key(lemma);
-  key.push_back('\0'); key.push_back(static_cast<char>(pos));
-  return key;
-}
-}
-
 bool Lexicon::has_lemma(std::string_view lemma) const {
   return by_lemma_.contains(std::string(lemma));
 }
+
 bool Lexicon::has(std::string_view lemma, Pos pos) const {
-  return index_.contains(row_key(lemma, pos));
+  return find(lemma, pos).has_value();
 }
+
 std::optional<Analysis> Lexicon::find(std::string_view lemma, Pos pos) const {
-  const auto it = index_.find(row_key(lemma, pos));
-  if (it == index_.end()) return std::nullopt;
-  return rows_[it->second].analysis;
+  const auto it = by_lemma_.find(std::string(lemma));
+  if (it == by_lemma_.end()) return {};
+  for (const auto index : it->second) {
+    const auto& row = rows_[index];
+    if (row.analysis.pos == pos) {
+      return row.analysis;
+    }
+  }
+  return std::nullopt;
 }
+
 std::vector<Analysis> Lexicon::entries_for(std::string_view lemma) const {
   std::vector<Analysis> found;
   const auto it = by_lemma_.find(std::string(lemma));
   if (it != by_lemma_.end()) for (const auto index : it->second) found.push_back(rows_[index].analysis);
   return found;
 }
+
 const std::vector<std::string>* Lexicon::synonyms(std::string_view lemma, Pos pos) const {
-  const auto it = index_.find(row_key(lemma, pos));
-  return it == index_.end() ? nullptr : &rows_[it->second].synonyms;
+  const auto it = by_lemma_.find(std::string(lemma));
+  if (it == by_lemma_.end()) return {};
+  for (const auto index : it->second) {
+    const auto& row = rows_[index];
+    if (row.analysis.pos == pos) {
+      return &row.synonyms;
+    }
+  }
+  return nullptr;
 }
-const std::vector<std::vector<std::string>>& Lexicon::phrases() const { return phrases_; }
+
+const std::vector<std::vector<std::string>>& Lexicon::phrases() const {
+  return phrases_;
+}
+
 void Lexicon::add(Analysis entry, std::vector<std::string> synonyms) {
-  const auto key = row_key(entry.lemma, entry.pos);
-  if (index_.contains(key)) return;
-  const auto index = rows_.size();
-  index_[key] = index;
-  by_lemma_[entry.lemma].push_back(index);
+  if (find(entry.lemma, entry.pos)) {
+    return;
+  }
+  by_lemma_[entry.lemma].push_back(rows_.size());
   rows_.push_back(Row{std::move(entry), std::move(synonyms)});
 }
+
+const std::vector<std::vector<std::string>>& Lexicon::phrases_starting(std::string_view first, bool allow_variation) const {
+  static const std::vector<std::vector<std::string>> empty;
+  const auto& index = allow_variation ? fixed_phrases_by_first_ : phrases_by_first_;
+  const auto found = index.find(std::string(first));
+  return found == index.end() ? empty : found->second;
+}
+
 void Lexicon::add_phrase(std::vector<std::string> phrase) {
+  if (phrase.empty()) return;
+  const auto add = [&](auto& index) {
+    auto& bucket = index[phrase.front()];
+    bucket.push_back(phrase);
+    std::ranges::stable_sort(bucket, [](const auto& a, const auto& b) { return a.size() > b.size(); });
+  };
+  add(phrases_by_first_);
+  std::string joined;
+  for (const auto& word : phrase) { if (!joined.empty()) joined += ' '; joined += word; }
+  const bool variable = std::ranges::any_of(phrase_rules, [&](const auto& rule) {
+    return std::ranges::find(rule.forms, joined) != rule.forms.end();
+  });
+  if (!variable) add(fixed_phrases_by_first_);
   phrases_.push_back(std::move(phrase));
-  std::ranges::stable_sort(phrases_, [](const auto& a, const auto& b) { return a.size() > b.size(); });
 }
 
 const Lexicon& lexicon() {
