@@ -41,6 +41,8 @@ struct Token {
   bool replaced = false;
 };
 
+bool update_quotes(std::vector<std::string>& stack, std::string_view token, std::string_view previous);
+
 struct Piece {
   bool sentence = false;
   std::string text;

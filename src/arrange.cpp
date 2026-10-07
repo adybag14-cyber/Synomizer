@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "internal.hpp"
+#include <unordered_set>
 
 namespace synomizer {
 namespace {
 
 bool is_space_token(const Token& token) {
-  return !token.word && !token.text.empty() && token.text.find_first_not_of(" \t\n") == std::string::npos;
+  return !token.word && !token.text.empty() && token.text.find_first_not_of(" \t\r\n") == std::string::npos;
 }
 
 bool is_digit_token(const Token& token) {
@@ -147,7 +148,7 @@ void decap_first(std::vector<Token>& slice) {
       continue;
     }
     const std::string low = lower_copy(token.text);
-    if (low == "i" || is_all_caps_word(token.text) || !is_capitalized_word(token.text)) {
+    if (token.frozen || low == "i" || is_all_caps_word(token.text) || !is_capitalized_word(token.text)) {
       return;
     }
     const bool ordinary = is_determiner(low) || is_pronoun(low) || is_aux(low) || is_preposition(low) ||
@@ -163,6 +164,8 @@ void decap_first(std::vector<Token>& slice) {
 }
 
 bool is_manner_adverb(const Token& token) {
+  static const std::unordered_set<std::string_view> movable={"quickly","rapidly","swiftly","carefully","cautiously","quietly","silently","loudly","noisily"};
+  if (token.frozen || !movable.contains(lower_copy(token.text))) return false;
   const std::vector<Analysis> analyses = analyze_word(token.text, "", false);
   for (const Analysis& analysis : analyses) {
     if (analysis.pos == Pos::Adv && analysis.flag == "manner") {
@@ -185,13 +188,19 @@ bool has_adjective(const Token& token) {
   return false;
 }
 
+// Moving negation, modality or nested clauses can change scope rather than wording.
 bool blocked_sentence(const std::vector<Token>& tokens) {
-  for (const Token& token : tokens) {
-    if (token.text == ";" || token.text == ":") {
-      return true;
-    }
+  static const std::unordered_set<std::string_view> scope = {"not","never","no","neither","nor","without","only","hardly","barely","scarcely","can","could","may","might","must","shall","should","will","would","cannot","that","who","whom","whose","which","what","whether","if","unless","until","since","as","while","where","whenever","why","how","to","say","says","said","tell","tells","told","know","knows","knew","think","thinks","thought","believe","believes","believed","wonder","wonders","wondered","very","too","so","quite","rather","almost","nearly","less","more","least","most","enough","especially","particularly"};
+  if (tokens.empty() || is_space_token(tokens.front()) || is_space_token(tokens.back())) return true;
+  int subordinators=0;
+  for (const auto& token : tokens) {
+    const auto low=lower_copy(token.text);
+    if (scope.contains(low) || low.ends_with("n't")) return true;
+    if (is_subordinator_word(low)) ++subordinators;
+    if (token.text.find_first_of("\r\n\t;:\"'()[]{}<>?!") != std::string::npos ||
+        (!token.word && token.frozen)) return true;
   }
-  return false;
+  return subordinators>1;
 }
 
 struct Subordinator {
@@ -354,6 +363,9 @@ std::optional<ArrangeOutcome> try_adverb(const std::vector<Token>& tokens, const
   }
   const int punct = punct_index(tokens);
   const int limit = punct < 0 ? static_cast<int>(tokens.size()) : punct;
+  int predicates=0;
+  for (const auto& t : tokens) if (t.word && looks_like_verb_token(t.text) && !is_aux(lower_copy(t.text))) ++predicates;
+  if (predicates>1) return std::nullopt;
   const std::string before = concat_tokens(tokens);
   const Token& first = tokens[static_cast<std::size_t>(words[0])];
   int after_first = words[0] + 1;
@@ -437,7 +449,13 @@ std::optional<ArrangeOutcome> try_adjectives(const std::vector<Token>& tokens, c
       continue;
     }
     std::vector<Token> copy = tokens;
-    std::swap(copy[static_cast<std::size_t>(left)].text, copy[static_cast<std::size_t>(right)].text);
+    bool adjacent=true;
+    for (int i=left+1;i<right;++i) if (i!=mid && !is_space_token(tokens[static_cast<std::size_t>(i)])) adjacent=false;
+    if (!adjacent) continue;
+    copy[static_cast<std::size_t>(left)].text=apply_caps(tokens[static_cast<std::size_t>(right)].text,tokens[static_cast<std::size_t>(left)].text);
+    copy[static_cast<std::size_t>(right)].text=apply_caps(tokens[static_cast<std::size_t>(left)].text,tokens[static_cast<std::size_t>(right)].text);
+    copy[static_cast<std::size_t>(left)].replaced=true;
+    copy[static_cast<std::size_t>(right)].replaced=true;
     return finish(std::move(copy), concat_tokens(tokens), "Swapped coordinated adjectives");
   }
   return std::nullopt;

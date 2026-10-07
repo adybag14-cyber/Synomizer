@@ -14,44 +14,133 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test:
+  native:
+    name: Native (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Configure C++23
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --config Release --parallel 2
+      - name: Native assertions
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: CLI, browser parity, safety corpus and site validation
+        run: npm test
+      - name: Package standalone CLI, license and documentation
+        run: cpack --config build/CPackConfig.cmake -C Release -G ZIP -B artifacts -D CPACK_PACKAGE_FILE_NAME=Synomizer-${{ runner.os }}-${{ runner.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/*.zip
+          if-no-files-found: error
+
+  sanitizers:
+    name: Address and undefined-behaviour sanitizers
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Configure and build
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-          cmake --build build
-      - name: C++ tests
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined'
+          cmake --build build --parallel 2
+      - name: Native regressions under sanitizers
         run: ctest --test-dir build --output-on-failure
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+
+  browser:
+    name: Browser acceptance and Pages artifact
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-      - name: Browser engine matches the binary
-        run: node --test tests/demo_engine.test.mjs
-        env:
-          SYNOMIZER_BIN: ${{ github.workspace }}/build/synomizer
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build native reference and exact site artifact
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel 2
+          npm run build:site
+      - name: Install browser test tools
+        run: |
+          python -m pip install -r requirements-e2e.txt
+          python -m playwright install --with-deps chromium firefox
+      - name: Chromium acceptance
+        run: python tests/browser_test.py --browser chromium
+      - name: Firefox acceptance
+        run: python tests/browser_test.py --browser firefox
+      - name: Preserve screenshots, traces and acceptance reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-evidence
+          path: artifacts/
+          if-no-files-found: warn
+      - name: Upload the tested Pages artifact
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
 
   pages:
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Deploy verified site
+    needs: [native, sanitizers, browser]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pages: write
       id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Assemble the site
-        run: |
-          mkdir -p site/data
-          cp docs/index.html docs/styles.css docs/app.js docs/engine.js docs/favicon.svg site/
-          cp data/lexicon.tsv data/phrases.txt site/data/
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
+      - uses: actions/configure-pages@v5
       - id: deployment
         uses: actions/deploy-pages@v4
+      - name: Verify deployed commit and every asset hash
+        uses: actions/github-script@v7
+        env:
+          SITE_URL: ${{ steps.deployment.outputs.page_url }}
+        with:
+          script: |
+            const crypto = require('node:crypto');
+            const base = process.env.SITE_URL;
+            const bust = '?verify=' + context.sha;
+            let success = false;
+            for (let attempt = 0; attempt < 12; attempt++) {
+              try {
+                const response = await fetch(new URL('build.json' + bust, base));
+                if (!response.ok) throw new Error(`build.json: ${response.status}`);
+                const build = await response.json();
+                if (build.commit !== context.sha) throw new Error(`Deployment still serves ${build.commit}`);
+                for (const [file, hash] of Object.entries(build.sha256)) {
+                  const asset = await fetch(new URL(file + bust, base));
+                  if (!asset.ok) throw new Error(`${file}: ${asset.status}`);
+                  const actual = crypto.createHash('sha256').update(Buffer.from(await asset.arrayBuffer())).digest('hex');
+                  if (actual !== hash) throw new Error(`${file}: hash mismatch`);
+                }
+                core.info(`Verified ${context.sha} and ${Object.keys(build.sha256).length} live assets.`);
+                success = true;
+                break;
+              } catch (error) {
+                core.info(error.message);
+                await new Promise(resolve => setTimeout(resolve, 10000));
+              }
+            }
+            if (!success) core.setFailed('Deployed site did not match the tested commit and asset hashes.');

@@ -1,0 +1,338 @@
+[
+  {
+    "name": "unchanged 0",
+    "input": "She said \"The bus arrived because the road was icy.\"",
+    "expected": "She said \"The bus arrived because the road was icy.\""
+  },
+  {
+    "name": "unchanged 1",
+    "input": "She said “happy. happy.”",
+    "expected": "She said “happy. happy.”"
+  },
+  {
+    "name": "unchanged 2",
+    "input": "She said 'happy. happy.'",
+    "expected": "She said 'happy. happy.'"
+  },
+  {
+    "name": "unchanged 3",
+    "input": "She said «happy. happy.»",
+    "expected": "She said «happy. happy.»"
+  },
+  {
+    "name": "unchanged 4",
+    "input": "She said “He said ‘happy.’”.",
+    "expected": "She said “He said ‘happy.’”."
+  },
+  {
+    "name": "unchanged 5",
+    "input": "She said \"happy. happy.",
+    "expected": "She said \"happy. happy."
+  },
+  {
+    "name": "unchanged 6",
+    "input": "https://happy.example/car?choice=happy&result=big",
+    "expected": "https://happy.example/car?choice=happy&result=big"
+  },
+  {
+    "name": "unchanged 7",
+    "input": "happy@example.com",
+    "expected": "happy@example.com"
+  },
+  {
+    "name": "unchanged 8",
+    "input": "`The happy child bought a car.`",
+    "expected": "`The happy child bought a car.`"
+  },
+  {
+    "name": "unchanged 9",
+    "input": "```cpp\nconst auto happy = \"car\";\n```",
+    "expected": "```cpp\nconst auto happy = \"car\";\n```"
+  },
+  {
+    "name": "unchanged 10",
+    "input": "`happy child",
+    "expected": "`happy child"
+  },
+  {
+    "name": "unchanged 11",
+    "input": "I lived alone.",
+    "expected": "I lived alone."
+  },
+  {
+    "name": "unchanged 12",
+    "input": "It was an honest mistake.",
+    "expected": "It was an honest mistake."
+  },
+  {
+    "name": "unchanged 13",
+    "input": "The result was statistically significant.",
+    "keep": [
+      "statistically significant"
+    ]
+  },
+  {
+    "name": "unchanged 14",
+    "input": "The value was 3.14 exactly.",
+    "expected": "The value was 3.14 exactly."
+  },
+  {
+    "name": "scope 0",
+    "input": "She did not leave because the bus arrived.",
+    "options": {
+      "synonyms": false
+    },
+    "expected": "She did not leave because the bus arrived."
+  },
+  {
+    "name": "scope 1",
+    "input": "She didn't leave because the bus arrived.",
+    "options": {
+      "synonyms": false
+    },
+    "expected": "She didn't leave because the bus arrived."
+  },
+  {
+    "name": "scope 2",
+    "input": "She left very quickly.",
+    "options": {
+      "synonyms": false
+    },
+    "expected": "She left very quickly."
+  },
+  {
+    "name": "scope 3",
+    "input": "She may leave because the bus arrived.",
+    "options": {
+      "synonyms": false
+    },
+    "expected": "She may leave because the bus arrived."
+  },
+  {
+    "name": "scope 4",
+    "input": "I know she left because the bus arrived.",
+    "options": {
+      "synonyms": false
+    },
+    "expected": "I know she left because the bus arrived."
+  },
+  {
+    "name": "scope 5",
+    "input": "She told him to leave quickly.",
+    "options": {
+      "synonyms": false
+    },
+    "expected": "She told him to leave quickly."
+  },
+  {
+    "name": "scope 6",
+    "input": "Sadly, she left the room.",
+    "options": {
+      "synonyms": false
+    },
+    "expected": "Sadly, she left the room."
+  },
+  {
+    "name": "scope 7",
+    "input": "They arrived when she left because it was late.",
+    "options": {
+      "synonyms": false
+    },
+    "expected": "They arrived when she left because it was late."
+  },
+  {
+    "name": "scope 8",
+    "input": "Did she leave because the bus arrived?",
+    "options": {
+      "synonyms": false
+    },
+    "expected": "Did she leave because the bus arrived?"
+  },
+  {
+    "name": "scope 9",
+    "input": "She left (quietly) because the bus arrived.",
+    "options": {
+      "synonyms": false
+    },
+    "expected": "She left (quietly) because the bus arrived."
+  },
+  {
+    "name": "scope 10",
+    "input": "Because she was late,\nshe left quickly.",
+    "options": {
+      "synonyms": false
+    },
+    "expected": "Because she was late,\nshe left quickly."
+  },
+  {
+    "name": "article after movement",
+    "input": "It was an honest and careful person.",
+    "options": {
+      "synonyms": false
+    },
+    "expected": "It was a careful and honest person."
+  },
+  {
+    "name": "Unicode token",
+    "input": "A happyé child.",
+    "keep": [
+      "happyé"
+    ]
+  },
+  {
+    "name": "mixed scripts",
+    "input": "你好. The happy child met José. 🙂",
+    "keep": [
+      "你好",
+      "José",
+      "🙂"
+    ]
+  },
+  {
+    "name": "curly contraction",
+    "input": "She isn’t happy.",
+    "keep": [
+      "isn’t"
+    ]
+  },
+  {
+    "name": "smart possessive",
+    "input": "The teacher’s car arrived.",
+    "keep": [
+      "teacher’s"
+    ]
+  },
+  {
+    "name": "identifiers",
+    "input": "The happy123 car_id was ready.",
+    "keep": [
+      "happy123",
+      "car_id"
+    ]
+  },
+  {
+    "name": "URLs in prose",
+    "input": "Visit https://happy.example/car or email happy@example.com.",
+    "keep": [
+      "https://happy.example/car",
+      "happy@example.com"
+    ]
+  },
+  {
+    "name": "title",
+    "input": "Happy People",
+    "expected": "Happy People"
+  },
+  {
+    "name": "potential name",
+    "input": "Joy was happy.",
+    "keep": [
+      "Joy"
+    ]
+  },
+  {
+    "name": "acronym",
+    "input": "SMART was ready.",
+    "keep": [
+      "SMART"
+    ]
+  },
+  {
+    "name": "CRLF",
+    "input": "The happy child.\r\n\r\nThe careful teacher.",
+    "keep": [
+      "\r\n\r\n"
+    ]
+  },
+  {
+    "name": "no op",
+    "input": "﻿\tA happy child.\r\n\n  \"happy\"\r",
+    "options": {
+      "synonyms": false,
+      "arrange": false
+    },
+    "expected": "﻿\tA happy child.\r\n\n  \"happy\"\r"
+  },
+  {
+    "name": "quote opt-in",
+    "input": "She said \"happy\".",
+    "options": {
+      "protectQuotes": false
+    },
+    "different": true
+  },
+  {
+    "name": "complement likely",
+    "input": "She is likely to leave.",
+    "expected": "She is likely to leave."
+  },
+  {
+    "name": "complement eager",
+    "input": "They were eager to help.",
+    "keep": [
+      "eager to"
+    ]
+  },
+  {
+    "name": "remember infinitive",
+    "input": "I remembered to help.",
+    "keep": [
+      "remembered to"
+    ]
+  },
+  {
+    "name": "find object adjective",
+    "input": "She found it difficult.",
+    "keep": [
+      "found it"
+    ]
+  },
+  {
+    "name": "find noun adjective",
+    "input": "She found the car useful.",
+    "keep": [
+      "found"
+    ]
+  },
+  {
+    "name": "attributive adjective",
+    "input": "A frightened child arrived.",
+    "absent": [
+      "afraid"
+    ]
+  },
+  {
+    "name": "noun name capitalisation",
+    "input": "Joy left because the bus arrived.",
+    "options": {
+      "synonyms": false
+    },
+    "expected": "Because the bus arrived, Joy left."
+  },
+  {
+    "name": "uppercase URL",
+    "input": "Visit HTTPS://happy.example/car.",
+    "keep": [
+      "HTTPS://happy.example/car."
+    ]
+  },
+  {
+    "name": "URL parentheses",
+    "input": "https://happy.example/thing(happy).",
+    "expected": "https://happy.example/thing(happy)."
+  },
+  {
+    "name": "emoji punctuation",
+    "input": "🙂. The happy child arrived.",
+    "keep": [
+      "🙂."
+    ]
+  },
+  {
+    "name": "unicode punctuation",
+    "input": "é. The happy child arrived.",
+    "keep": [
+      "é."
+    ]
+  }
+]

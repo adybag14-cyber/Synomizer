@@ -5,3 +5,9 @@ cmake-build-*/
 CMakeUserPresets.json
 *.user
 compile_commands.json
+
+site/
+artifacts/
+build-*/
+node_modules/
+test-results/

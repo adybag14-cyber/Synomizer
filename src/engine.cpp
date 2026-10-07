@@ -23,13 +23,7 @@ Result rewrite(std::string_view input, const Options& options) {
     settings.intensity = 2;
   }
 
-  std::string text;
-  text.reserve(input.size());
-  for (char c : input) {
-    if (c != '\r') {
-      text.push_back(c);
-    }
-  }
+  const std::string_view text = input;
 
   Result result;
   std::uint64_t ordinal = 0;

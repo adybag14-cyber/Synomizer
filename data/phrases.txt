@@ -71,3 +71,44 @@ new york
 a bit
 a few
 no one
+
+# Common idioms, collocations and technical terms: exact phrases, not thesaurus slots.
+honest mistake
+honest mistakes
+empty promise
+empty promises
+strong tea
+heavy rain
+cold war
+small talk
+big deal
+bright student
+bright students
+correct route
+local students
+statistically significant
+significant difference
+significant differences
+artificial intelligence
+real number
+real numbers
+normal distribution
+standard deviation
+healthy economy
+legal tender
+common sense
+common cold
+rough estimate
+rough estimates
+fast food
+fast asleep
+sound asleep
+fine art
+quiet please
+in short
+for good
+of late
+as yet
+by far
+by and large
+in the long run

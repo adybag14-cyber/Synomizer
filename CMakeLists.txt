@@ -1,9 +1,19 @@
 cmake_minimum_required(VERSION 3.20)
-project(Synomizer VERSION 1.0.0 LANGUAGES CXX)
+project(Synomizer VERSION 1.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Reconfigure whenever embedded resources change, including incremental builds.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/data/lexicon.tsv"
+  "${CMAKE_CURRENT_SOURCE_DIR}/data/phrases.txt"
+)
+if(MSVC)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+  add_compile_options(/utf-8 /Zc:__cplusplus)
+endif()
 
 file(READ "${CMAKE_SOURCE_DIR}/data/lexicon.tsv" LEXICON_TSV)
 file(READ "${CMAKE_SOURCE_DIR}/data/phrases.txt" PHRASES_TXT)
@@ -41,7 +51,7 @@ target_include_directories(synomizer-lib
   PUBLIC include
   PRIVATE src "${CMAKE_BINARY_DIR}/generated"
 )
-target_compile_definitions(synomizer-lib PUBLIC SYNOMIZER_VERSION="1.0.0")
+target_compile_definitions(synomizer-lib PUBLIC SYNOMIZER_VERSION="${PROJECT_VERSION}")
 
 add_executable(synomizer src/main.cpp)
 target_link_libraries(synomizer PRIVATE synomizer-lib)
@@ -61,3 +71,21 @@ if (NOT MSVC)
   target_compile_options(synomizer-tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 add_test(NAME engine COMMAND synomizer-tests)
+
+if(WIN32)
+  target_link_libraries(synomizer PRIVATE shell32)
+  if(MINGW)
+    target_link_options(synomizer PRIVATE -static -static-libgcc -static-libstdc++)
+    target_link_options(synomizer-tests PRIVATE -static -static-libgcc -static-libstdc++)
+  endif()
+endif()
+
+include(GNUInstallDirs)
+install(TARGETS synomizer RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES LICENSE README.md DESTINATION ${CMAKE_INSTALL_DOCDIR})
+install(FILES examples/sample.txt DESTINATION ${CMAKE_INSTALL_DOCDIR}/examples)
+set(CPACK_PACKAGE_NAME "Synomizer")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
+set(CPACK_GENERATOR "ZIP;TGZ")
+include(CPack)

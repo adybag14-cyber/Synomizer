@@ -231,3 +231,35 @@ mark {
   textarea, .revise { min-height: 16rem; }
   #changes li { grid-template-columns: 1fr; gap: 0.15rem; }
 }
+
+/* Narrow screens and long unbroken text must not widen the page. */
+[hidden] { display: none !important; }
+.sheets > section { min-width: 0; }
+.tools > label { max-width: 100%; }
+select { max-width: 100%; }
+textarea, .revise { max-height: 34rem; overflow: auto; }
+.revise:empty::before { content: "Your rewrite will appear here."; color: var(--faint); }
+.revise[aria-busy="true"] { opacity: 0.6; }
+.privacy, .hint { color: var(--faint); font-size: 0.85rem; line-height: 1.5; }
+.privacy { margin: 0.75rem 0 0; }
+.hint { margin: 0.4rem 0 1rem; }
+.file-tools { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.9rem 0; }
+.action-spacer { flex: 1; }
+button { min-height: 2.5rem; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.secondary:hover:not(:disabled), #copy:hover:not(:disabled), #reset:hover:not(:disabled) { background: var(--vermilion); color: var(--paper); }
+#changes li > span { min-width: 0; overflow-wrap: anywhere; }
+.help { border-block: 1px solid var(--line); padding: 0.9rem 0; margin-top: 1.4rem; line-height: 1.5; }
+.help summary { cursor: pointer; font-weight: 600; }
+.help p { max-width: 75ch; }
+.skip-link { position: absolute; left: -9999px; }
+.skip-link:focus { position: static; display: inline-block; background: var(--sheet); color: var(--ink); padding: 1rem; }
+@media (max-width: 480px) {
+  .file-tools button { flex: 1 1 40%; }
+  .action-spacer { display: none; }
+  .tools { gap: 0.65rem; }
+}
+@media print {
+  .tools, .file-tools, .help, .status, .banner, .skip-link { display: none; }
+  textarea, .revise { max-height: none; overflow: visible; }
+}

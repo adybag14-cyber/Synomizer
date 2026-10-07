@@ -442,105 +442,70 @@ function knownAdjective(resources, word) {
   return analyze(resources, word, false).some((item) => item.pos === "adj");
 }
 
+const SPECIAL = ['\u201c','\u201d','\u2018','\u2019','\u00ab','\u00bb','\u2013','\u2014','\u2026','\u00a0','\ufeff'];
+function updateQuotes(stack, token, previous = '') {
+  if (stack.length && token === stack.at(-1)) { stack.pop(); return; }
+  if (token === '"' || (token === "'" && !/[sS]$/.test(previous))) { stack.push(token); return; }
+  const close = {'\u201c':'\u201d','\u2018':'\u2019','\u00ab':'\u00bb'}[token];
+  if (close) stack.push(close);
+}
 function tokenize(text) {
-  const tokens = [];
-  let i = 0;
-  const space = (ch) => ch === " " || ch === "\t" || ch === "\n";
-  while (i < text.length) {
-    const ch = text[i];
-    const code = ch.charCodeAt(0);
-    if (space(ch)) {
-      let j = i + 1;
-      while (j < text.length && space(text[j])) j++;
-      tokens.push({ text: text.slice(i, j), word: false, frozen: false, replaced: false });
-      i = j;
-      continue;
+  const out = [];
+  const space = ch => /[ \t\r\n]/.test(ch);
+  const special = i => SPECIAL.includes(text[i]);
+  const unit = i => i < text.length && (/[A-Za-z0-9]/.test(text[i]) || (text.charCodeAt(i) >= 128 && !special(i)));
+  const push = (i,j,word=false,frozen=false) => out.push({text:text.slice(i,j),word,frozen,replaced:false});
+  for (let i=0; i<text.length;) {
+    let j=i+1;
+    if (space(text[i])) { while (j<text.length && space(text[j])) j++; push(i,j); i=j; continue; }
+    if (text[i] === '`') {
+      while (j<text.length && text[j] === '`') j++;
+      const marker=text.slice(i,j), end=text.indexOf(marker,j);
+      j=end<0 ? text.length : end+marker.length;
+      push(i,j,false,true); i=j; continue;
     }
-    if (code >= 128) {
-      let j = i + 1;
-      while (j < text.length && text.charCodeAt(j) >= 128) j++;
-      tokens.push({ text: text.slice(i, j), word: true, frozen: true, replaced: false });
-      i = j;
-      continue;
+    if (isLetter(text[i]) && (i===0 || !unit(i-1))) {
+      let end=i;
+      while (end<text.length && !/[ \t\r\n<>"'`]/.test(text[end])) end++;
+      const candidate=text.slice(i,end), at=candidate.indexOf('@');
+      if ((candidate.includes('://') || /^www\./i.test(candidate)) || (at>=0 && candidate.indexOf('.',at)>=0)) {
+        push(i,end,false,true); i=end; continue;
+      }
     }
-    if (isLetter(ch)) {
-      let j = i + 1;
-      while (j < text.length) {
-        const d = text[j];
-        if (isLetter(d)) {
-          j++;
-          continue;
-        }
-        if ((d === "'" || d === "-") && j + 1 < text.length && isLetter(text[j + 1])) {
-          j++;
-          continue;
-        }
+    if (special(i)) { push(i,i+1,false,true); i++; continue; }
+    if (unit(i)) {
+      let word=isLetter(text[i]) || text.charCodeAt(i)>=128;
+      let frozen=/[0-9]/.test(text[i]) || text.charCodeAt(i)>=128;
+      while (j<text.length) {
+        if (unit(j)) { word ||= isLetter(text[j]) || text.charCodeAt(j)>=128; frozen ||= /[0-9]/.test(text[j]) || text.charCodeAt(j)>=128; j++; continue; }
+        if ("'-_".includes(text[j]) && unit(j+1)) { frozen ||= text[j]==='_'; j++; continue; }
+        if (text[j]==='\u2019' && unit(j+1)) { frozen=true; j++; continue; }
         break;
       }
-      tokens.push({ text: text.slice(i, j), word: true, frozen: false, replaced: false });
-      i = j;
-      continue;
+      push(i,j,word,frozen && word); i=j; continue;
     }
-    if (code >= 48 && code <= 57) {
-      let j = i + 1;
-      while (j < text.length && text.charCodeAt(j) >= 48 && text.charCodeAt(j) <= 57) j++;
-      tokens.push({ text: text.slice(i, j), word: false, frozen: false, replaced: false });
-      i = j;
-      continue;
-    }
-    tokens.push({ text: ch, word: false, frozen: false, replaced: false });
-    i++;
+    push(i,i+1); i++;
   }
-  return tokens;
+  return out;
 }
-
-function concat(tokens) {
-  return tokens.map((token) => token.text).join("");
-}
-
+function concat(tokens) { return tokens.map(t=>t.text).join(''); }
 function splitPieces(text) {
-  const pieces = [];
-  let start = 0;
-  let quotes = false;
-  let i = 0;
-  const space = (ch) => ch === " " || ch === "\t" || ch === "\n";
-  while (i < text.length) {
-    const ch = text[i];
-    if (ch === '"') {
-      quotes = !quotes;
-      i++;
-      continue;
+  const tokens=tokenize(text), pieces=[], quotes=[];
+  let current=[];
+  const flush=()=> { if(current.length) {pieces.push({sentence:true,text:concat(current),tokens:current}); current=[];} };
+  for(let i=0;i<tokens.length;i++) {
+    const t=tokens[i], prev=i?tokens[i-1].text:'';
+    updateQuotes(quotes,t.text,prev);
+    if(!quotes.length && isSpace(t) && !current.length) {
+      flush(); pieces.push({sentence:false,text:t.text,tokens:[]}); continue;
     }
-    if (!quotes && (ch === "." || ch === "!" || ch === "?")) {
-      let boundary = true;
-      if (ch === "." && i + 1 < text.length && text[i + 1] === ".") boundary = false;
-      if (ch === "." && i > 0 && i + 1 < text.length && /\d/.test(text[i - 1]) && /\d/.test(text[i + 1])) boundary = false;
-      if (ch === "." && boundary) {
-        let j = i;
-        while (j > start && isLetter(text[j - 1])) j--;
-        const word = lower(text.slice(j, i));
-        if (word.length === 1 || ABBREV.has(word)) boundary = false;
-      }
-      if (boundary) {
-        let end = i + 1;
-        while (end < text.length && (text[end] === '"' || text[end] === "'")) end++;
-        const sentence = text.slice(start, end);
-        pieces.push({ sentence: true, text: sentence, tokens: tokenize(sentence) });
-        let sep = end;
-        while (sep < text.length && space(text[sep])) sep++;
-        if (sep > end) pieces.push({ sentence: false, text: text.slice(end, sep), tokens: [] });
-        start = sep;
-        i = sep;
-        continue;
-      }
-    }
-    i++;
+    current.push(t);
+    if(quotes.length || !['.','!','?'].includes(t.text)) continue;
+    if(tokens[i+1] && ['.','!','?'].includes(tokens[i+1].text)) continue;
+    if(t.text==='.' && ((prev.length===1 && isLetter(prev)) || ABBREV.has(lower(prev)) || (/[0-9]$/.test(prev) && /^[0-9]/.test(tokens[i+1]?.text ?? '')))) continue;
+    flush();
   }
-  if (start < text.length) {
-    const sentence = text.slice(start);
-    pieces.push({ sentence: true, text: sentence, tokens: tokenize(sentence) });
-  }
-  return pieces;
+  flush(); return pieces;
 }
 
 function wordPositions(tokens) {
@@ -557,7 +522,7 @@ function wordAt(tokens, words, slot) {
 }
 
 function isSpace(token) {
-  return !token.word && token.text.length > 0 && /^[ \t\n]+$/.test(token.text);
+  return !token.word && token.text.length > 0 && /^[ \t\r\n]+$/.test(token.text);
 }
 
 function isDigitToken(token) {
@@ -608,7 +573,7 @@ function pushSpace(out) {
 function appendSlice(out, slice) {
   if (slice.length === 0) return;
   pushSpace(out);
-  out.push(...slice);
+  for (const token of slice) out.push(token);
 }
 
 function capFirst(slice) {
@@ -629,7 +594,7 @@ function decapFirst(resources, slice) {
   for (const token of slice) {
     if (!token.word || !token.text) continue;
     const low = lower(token.text);
-    if (low === "i" || allCaps(token.text) || !capitalized(token.text)) return;
+    if (token.frozen || low === "i" || allCaps(token.text) || !capitalized(token.text)) return;
     const ordinary = DETERMINERS.has(low) || PRONOUNS.has(low) || AUX.has(low) || PREPS.has(low) || coordinator(low) || subordinatorWord(low) || hasLemma(resources, low);
     if (!ordinary) return;
     if (isLetter(token.text[0])) token.text = lowerChar(token.text[0]) + token.text.slice(1);
@@ -638,6 +603,7 @@ function decapFirst(resources, slice) {
 }
 
 function manner(resources, token) {
+  if (token.frozen || !["quickly","rapidly","swiftly","carefully","cautiously","quietly","silently","loudly","noisily"].includes(lower(token.text))) return false;
   return analyze(resources, token.text, false).some((item) => item.pos === "adv" && item.flag === "manner");
 }
 
@@ -743,6 +709,7 @@ function tryClause(resources, tokens, words) {
 }
 
 function tryAdverb(resources, tokens, words) {
+  if (tokens.filter(t => t.word && looksLikeVerb(resources,t.text) && !AUX.has(lower(t.text))).length>1) return null;
   if (words.length < 3) return null;
   const punct = punctIndex(tokens);
   const limit = punct < 0 ? tokens.length : punct;
@@ -791,16 +758,20 @@ function tryAdjectives(resources, tokens, words) {
     const copy = tokens.map((token) => ({ ...token }));
     const left = copy[words[slot]];
     const right = copy[words[slot + 2]];
-    const swap = left.text;
-    left.text = right.text;
-    right.text = swap;
+    if (tokens.slice(words[slot]+1,words[slot+2]).some((t,i) => words[slot]+1+i!==words[slot+1] && !isSpace(t))) continue;
+    left.text = applyCaps(tokens[words[slot+2]].text,tokens[words[slot]].text);
+    right.text = applyCaps(tokens[words[slot]].text,tokens[words[slot+2]].text);
+    left.replaced = right.replaced = true;
     return finish(copy, concat(tokens), "Swapped coordinated adjectives");
   }
   return null;
 }
 
 function arrange(resources, tokens, enabled) {
-  if (!enabled || tokens.some((token) => token.text === ";" || token.text === ":")) return null;
+  if (!enabled || !tokens.length || isSpace(tokens[0]) || isSpace(tokens.at(-1))) return null;
+  const scope=setOf("not never no neither nor without only hardly barely scarcely can could may might must shall should will would cannot that who whom whose which what whether if unless until since as while where whenever why how to say says said tell tells told know knows knew think thinks thought believe believes believed wonder wonders wondered very too so quite rather almost nearly less more least most enough especially particularly");
+  if (tokens.some(t => scope.has(lower(t.text)) || lower(t.text).endsWith("n't") || /[\r\n\t;:"'()[\]{}<>?!]/.test(t.text) || (!t.word && t.frozen))) return null;
+  if (tokens.filter(t=>subordinatorWord(lower(t.text))).length>1) return null;
   const words = wordPositions(tokens);
   return tryClause(resources, tokens, words) || tryAdverb(resources, tokens, words) || tryAdjectives(resources, tokens, words);
 }
@@ -923,6 +894,12 @@ function verbFrame(resources, analysis, tokens, words, slot, prev) {
   }
   const next = atSlot(tokens, words, slot + 1);
   if (PARTICLES.has(next)) return false;
+  if (['remember','recall'].includes(lemma) && next==='to') return false;
+  if (['find','locate'].includes(lemma)) {
+    const after=(next==='it' || OBJECTS.has(next)) ? slot+2 : npEnd(resources,tokens,words,slot+1);
+    const complement=atSlot(tokens,words,after);
+    if(knownAdjective(resources,complement) || AUX.has(complement) || looksLikeVerb(resources,complement)) return false;
+  }
   if (secondNp(resources, tokens, words, slot)) return false;
   if ((lemma === "help" || lemma === "assist" || lemma === "aid") && bareVerbAfterNp(resources, tokens, words, slot)) return false;
   if ((lemma === "happen" || lemma === "occur") && next === "to") return false;
@@ -950,31 +927,12 @@ function withPossessive(word, possessive) {
 }
 
 function freezeQuotes(tokens) {
-  let straight = false;
-  let openDouble = false;
-  let openSingle = false;
-  for (const token of tokens) {
-    if (token.text === '"') {
-      straight = !straight;
-      continue;
-    }
-    if (token.text === "\u201C") {
-      openDouble = true;
-      continue;
-    }
-    if (token.text === "\u201D") {
-      openDouble = false;
-      continue;
-    }
-    if (token.text === "\u2018") {
-      openSingle = true;
-      continue;
-    }
-    if (token.text === "\u2019") {
-      openSingle = false;
-      continue;
-    }
-    if (token.word && (straight || openDouble || openSingle)) token.frozen = true;
+  const stack=[];
+  for(let i=0;i<tokens.length;i++) {
+    const token=tokens[i];
+    const inside=stack.length>0;
+    updateQuotes(stack,token.text,i?tokens[i-1].text:'');
+    if(inside || stack.length) token.frozen=true;
   }
 }
 
@@ -1018,6 +976,7 @@ function freezeNames(resources, tokens) {
     first = false;
     if (token.frozen) continue;
     const low = lower(token.text);
+    if (heading || (sentenceStart && capitalized(token.text) && knownNoun(resources,low))) {token.frozen=true;continue;}
     let letters = 0;
     let digit = false;
     let high = false;
@@ -1035,7 +994,7 @@ function freezeNames(resources, tokens) {
       token.frozen = true;
       continue;
     }
-    if (allCaps(token.text) && letters >= 2 && !hasLemma(resources, low)) {
+    if (allCaps(token.text) && letters >= 2) {
       token.frozen = true;
       continue;
     }
@@ -1078,6 +1037,7 @@ function substitute(resources, tokens, options, ordinal) {
     }
     if (!best || tied) continue;
     const chosen = kept[0];
+    if (chosen.pos==='adj' && next==='to' && ['likely','unlikely','probable','improbable','eager','enthusiastic'].includes(chosen.lemma)) continue;
     if (chosen.flag === "quant") {
       if (next === "of" || next === "more" || ["how", "too", "so", "as", "this", "that", "very"].includes(prev)) continue;
     }
@@ -1091,6 +1051,7 @@ function substitute(resources, tokens, options, ordinal) {
     if (!row) continue;
     const usable = [];
     for (const synonym of row.synonyms) {
+      if (chosen.pos==='adj' && (DETERMINERS.has(prev) || knownNoun(resources,next)) && ['afraid','aware','unwell'].includes(synonym)) continue;
       const inflected = inflect(synonym, chosen.pos, chosen.features);
       if (inflected) usable.push(inflected);
     }
@@ -1112,9 +1073,10 @@ function fixArticles(tokens, changes) {
   for (let slot = 0; slot < words.length; slot++) {
     const article = tokens[words[slot]];
     const low = lower(article.text);
-    if (low !== "a" && low !== "an") continue;
+    if (article.frozen || (low !== "a" && low !== "an")) continue;
     if (slot + 1 >= words.length) continue;
     const next = tokens[words[slot + 1]];
+    if (next.frozen || tokens.slice(words[slot]+1,words[slot+1]).some(t=>!isSpace(t))) continue;
     if (!next.replaced && !article.replaced) continue;
     const want = needsAn(next.text) ? "an" : "a";
     if (low === want) continue;
@@ -1125,7 +1087,12 @@ function fixArticles(tokens, changes) {
   }
 }
 
-export function rewrite(input, options, resources) {
+export function rewrite(input, options = {}, resources) {
+  if (typeof input !== "string") throw new TypeError("Text must be a string.");
+  if (!resources?.byLemma) throw new TypeError("Word lists are required.");
+  const seed = options.seed ?? 1;
+  if ((typeof seed === "number" && !Number.isSafeInteger(seed)) || !/^[0-9]+$/.test(String(seed)) || BigInt(seed) > 18446744073709551615n) throw new RangeError("Seed must be an unsigned 64-bit integer; use a string for large seeds.");
+  if (!Number.isInteger(options.intensity ?? 1)) throw new RangeError("Intensity must be an integer.");
   const settings = {
     seed: options.seed ?? 1,
     intensity: Math.min(2, Math.max(0, options.intensity ?? 1)),
@@ -1133,7 +1100,7 @@ export function rewrite(input, options, resources) {
     arrange: options.arrange !== false,
     protectQuotes: options.protectQuotes !== false,
   };
-  const text = input.replace(/\r/g, "");
+  const text = input;
   const result = { text: "", changes: [], parts: [] };
   let ordinal = 0n;
   for (const piece of splitPieces(text)) {
@@ -1154,9 +1121,9 @@ export function rewrite(input, options, resources) {
     const substituted = substitute(resources, tokens, settings, ordinal);
     ordinal = substituted.next;
     fixArticles(substituted.tokens, substituted.changes);
-    result.changes.push(...substituted.changes);
+    for (const change of substituted.changes) result.changes.push(change);
     for (const token of substituted.tokens) {
-      result.parts.push({ text: token.text, changed: token.replaced });
+      result.parts.push({ text: token.text, changed: token.replaced || Boolean(arranged) });
     }
     result.text += concat(substituted.tokens);
   }

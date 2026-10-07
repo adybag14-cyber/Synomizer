@@ -12,8 +12,10 @@
 namespace {
 
 int g_fails = 0;
+int g_checks = 0;
 
 void expect(bool ok, std::string_view name, std::string_view detail = {}) {
+  ++g_checks;
   if (ok) {
     return;
   }
@@ -26,6 +28,7 @@ void expect(bool ok, std::string_view name, std::string_view detail = {}) {
 }
 
 void expect_eq(std::string_view actual, std::string_view wanted, std::string_view name) {
+  ++g_checks;
   if (actual == wanted) {
     return;
   }
@@ -128,7 +131,7 @@ int main() {
                !contains(text, "remained") && !contains(text, "calm"),
            "predicative calm still changes", text);
   }
-  expect_eq(run("It was an honest mistake.").text, "It was a truthful error.", "honest fixes the article");
+  expect_eq(run("It was an honest mistake.").text, "It was an honest mistake.", "honest mistake is a protected collocation");
   expect_eq(run("The money was hidden.").text, "The cash was concealed.", "mass noun and participle");
   expect_eq(run("The children were ready.").text, "The youngsters were prepared.", "irregular plural");
   expect_eq(run("It was a short visit.").text, "It was a brief visit.", "short of time");
@@ -244,10 +247,48 @@ int main() {
   }
   expect(articles_ok, "a/an matches the following sound", article_problem);
 
+
+  // Safety regressions shared with the browser/native differential corpus.
+  { synomizer::Options o; expect_eq(run("She said \"The bus arrived because the road was icy.\"",o).text, "She said \"The bus arrived because the road was icy.\"", "unchanged 0"); }
+  { synomizer::Options o; expect_eq(run("She said “happy. happy.”",o).text, "She said “happy. happy.”", "unchanged 1"); }
+  { synomizer::Options o; expect_eq(run("She said 'happy. happy.'",o).text, "She said 'happy. happy.'", "unchanged 2"); }
+  { synomizer::Options o; expect_eq(run("She said «happy. happy.»",o).text, "She said «happy. happy.»", "unchanged 3"); }
+  { synomizer::Options o; expect_eq(run("She said “He said ‘happy.’”.",o).text, "She said “He said ‘happy.’”.", "unchanged 4"); }
+  { synomizer::Options o; expect_eq(run("She said \"happy. happy.",o).text, "She said \"happy. happy.", "unchanged 5"); }
+  { synomizer::Options o; expect_eq(run("https://happy.example/car?choice=happy&result=big",o).text, "https://happy.example/car?choice=happy&result=big", "unchanged 6"); }
+  { synomizer::Options o; expect_eq(run("happy@example.com",o).text, "happy@example.com", "unchanged 7"); }
+  { synomizer::Options o; expect_eq(run("`The happy child bought a car.`",o).text, "`The happy child bought a car.`", "unchanged 8"); }
+  { synomizer::Options o; expect_eq(run("```cpp\nconst auto happy = \"car\";\n```",o).text, "```cpp\nconst auto happy = \"car\";\n```", "unchanged 9"); }
+  { synomizer::Options o; expect_eq(run("`happy child",o).text, "`happy child", "unchanged 10"); }
+  { synomizer::Options o; expect_eq(run("I lived alone.",o).text, "I lived alone.", "unchanged 11"); }
+  { synomizer::Options o; expect_eq(run("It was an honest mistake.",o).text, "It was an honest mistake.", "unchanged 12"); }
+  { synomizer::Options o; expect_eq(run("The value was 3.14 exactly.",o).text, "The value was 3.14 exactly.", "unchanged 14"); }
+  { synomizer::Options o; o.synonyms=false; expect_eq(run("She did not leave because the bus arrived.",o).text, "She did not leave because the bus arrived.", "scope 0"); }
+  { synomizer::Options o; o.synonyms=false; expect_eq(run("She didn't leave because the bus arrived.",o).text, "She didn't leave because the bus arrived.", "scope 1"); }
+  { synomizer::Options o; o.synonyms=false; expect_eq(run("She left very quickly.",o).text, "She left very quickly.", "scope 2"); }
+  { synomizer::Options o; o.synonyms=false; expect_eq(run("She may leave because the bus arrived.",o).text, "She may leave because the bus arrived.", "scope 3"); }
+  { synomizer::Options o; o.synonyms=false; expect_eq(run("I know she left because the bus arrived.",o).text, "I know she left because the bus arrived.", "scope 4"); }
+  { synomizer::Options o; o.synonyms=false; expect_eq(run("She told him to leave quickly.",o).text, "She told him to leave quickly.", "scope 5"); }
+  { synomizer::Options o; o.synonyms=false; expect_eq(run("Sadly, she left the room.",o).text, "Sadly, she left the room.", "scope 6"); }
+  { synomizer::Options o; o.synonyms=false; expect_eq(run("They arrived when she left because it was late.",o).text, "They arrived when she left because it was late.", "scope 7"); }
+  { synomizer::Options o; o.synonyms=false; expect_eq(run("Did she leave because the bus arrived?",o).text, "Did she leave because the bus arrived?", "scope 8"); }
+  { synomizer::Options o; o.synonyms=false; expect_eq(run("She left (quietly) because the bus arrived.",o).text, "She left (quietly) because the bus arrived.", "scope 9"); }
+  { synomizer::Options o; o.synonyms=false; expect_eq(run("Because she was late,\nshe left quickly.",o).text, "Because she was late,\nshe left quickly.", "scope 10"); }
+  { synomizer::Options o; o.synonyms=false; expect_eq(run("It was an honest and careful person.",o).text, "It was a careful and honest person.", "article after movement"); }
+  { synomizer::Options o; expect_eq(run("Happy People",o).text, "Happy People", "title"); }
+  { synomizer::Options o; o.synonyms=false; o.arrange=false; expect_eq(run("﻿\tA happy child.\r\n\n  \"happy\"\r",o).text, "﻿\tA happy child.\r\n\n  \"happy\"\r", "no op"); }
+
+  expect_eq(run("She is likely to leave.").text,"She is likely to leave.","infinitive adjective frame");
+  expect(contains(run("She found it difficult.").text,"found it"),"find object-complement frame");
+  expect(contains(run("I remembered to help.").text,"remembered to"),"remember infinitive frame");
+  expect(!contains(run("A frightened child arrived.").text,"afraid"),"predicative adjective not attributive");
+  expect_eq(run("https://happy.example/thing(happy).").text,"https://happy.example/thing(happy).","URL punctuation literal");
+  expect(contains(run("Visit HTTPS://happy.example/car.").text,"HTTPS://happy.example/car."),"uppercase URL literal");
+
   if (g_fails != 0) {
     std::cerr << g_fails << " failure(s)\n";
     return EXIT_FAILURE;
   }
-  std::cout << "ok\n";
+  std::cout << "ok (" << g_checks << " assertions)\n";
   return EXIT_SUCCESS;
 }

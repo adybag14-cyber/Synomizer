@@ -125,7 +125,7 @@ multiple	adj	several	quant
 @group	adv	therefore|consequently	free
 @group	adv	moreover|furthermore	free
 @group	adv	perhaps|maybe	free
-@group	adv	currently|presently	free
+# currently/presently excluded: presently can mean soon.
 @group	adv	previously|formerly	free
 @group	adv	later|afterward|afterwards	free
 @group	adv	mainly|mostly|chiefly	free
@@ -134,7 +134,7 @@ multiple	adj	several	quant
 @group	adv	correctly|accurately	free
 @group	adv	eventually|ultimately	free
 @group	adv	recently|lately	free
-@group	adv	alone|solely	free
+# alone/solely deliberately excluded: solitude is not exclusivity.
 
 @group	noun	car|automobile	free
 @group	noun	doctor|physician	free
@@ -248,7 +248,7 @@ usage	noun	use	free
 @group	verb	remain|stay	free
 @group	verb	depart|exit	free
 @group	verb	examine|inspect	free
-@group	verb	consume|eat	free
+# consume/eat excluded: consume power is not eat power.
 @group	verb	protect|guard	free
 @group	verb	attack|assault	free
 @group	verb	hide|conceal	free
