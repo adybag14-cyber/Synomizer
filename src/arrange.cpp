@@ -151,7 +151,7 @@ void decap_first(std::vector<Token>& slice) {
       continue;
     }
     const std::string low = lower_copy(token.text);
-    if (low == "i" || is_all_caps_word(token.text) || !is_capitalized_word(token.text)) {
+    if (token.frozen || low == "i" || is_all_caps_word(token.text) || !is_capitalized_word(token.text)) {
       return;
     }
     const bool ordinary = is_determiner(low) || is_pronoun(low) || is_aux(low) || is_preposition(low) ||
@@ -167,6 +167,7 @@ void decap_first(std::vector<Token>& slice) {
 }
 
 bool is_manner_adverb(const Token& token) {
+  if (token.frozen) return false;
   const std::vector<Analysis> analyses = analyze_word(token.text, "", false);
   for (const Analysis& analysis : analyses) {
     if (analysis.pos == Pos::Adv && analysis.flag == "manner" &&
@@ -195,6 +196,10 @@ bool has_adjective(const Token& token) {
 bool blocked_sentence(const std::vector<Token>& tokens) {
   static const std::unordered_set<std::string_view> scope = {
     "not", "never", "no", "neither", "nor", "only", "just", "hardly", "scarcely", "barely",
+    "without", "can", "could", "may", "might", "must", "shall", "should", "will", "would", "cannot",
+    "say", "says", "said", "tell", "tells", "told", "know", "knows", "knew", "think", "thinks", "thought",
+    "believe", "believes", "believed", "wonder", "wonders", "wondered",
+    "very", "too", "so", "quite", "rather", "almost", "nearly", "less", "more", "least", "most", "enough", "especially", "particularly",
     "if", "unless", "whether", "that", "which", "who", "whom", "whose", "where", "why", "how", "while", "to"};
   int subordinators = 0, commas = 0;
   for (const auto& token : tokens) {
@@ -365,6 +370,9 @@ std::optional<ArrangeOutcome> try_clause(const std::vector<Token>& tokens, const
 }
 
 std::optional<ArrangeOutcome> try_adverb(const std::vector<Token>& tokens, const std::vector<int>& words) {
+  int predicates=0;
+  for (const auto& token : tokens) if (token.word && looks_like_verb_token(token.text) && !is_aux(lower_copy(token.text))) ++predicates;
+  if (predicates>1) return std::nullopt;
   if (words.size() < 3) {
     return std::nullopt;
   }
@@ -461,6 +469,8 @@ std::optional<ArrangeOutcome> try_adjectives(const std::vector<Token>& tokens, c
     std::vector<Token> copy = tokens;
     copy[static_cast<std::size_t>(left)].text = apply_caps(lower_copy(tokens[static_cast<std::size_t>(right)].text), tokens[static_cast<std::size_t>(left)].text);
     copy[static_cast<std::size_t>(right)].text = apply_caps(lower_copy(tokens[static_cast<std::size_t>(left)].text), tokens[static_cast<std::size_t>(right)].text);
+    copy[static_cast<std::size_t>(left)].replaced = true;
+    copy[static_cast<std::size_t>(right)].replaced = true;
     return finish(std::move(copy), concat_tokens(tokens), "Swapped coordinated adjectives");
   }
   return std::nullopt;

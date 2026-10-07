@@ -55,6 +55,20 @@ std::size_t opaque_end(std::string_view t, std::size_t i) {
   }
   if (!is_letter(static_cast<unsigned char>(t[i])) && !digit(static_cast<unsigned char>(t[i]))) return i;
   std::size_t end = i;
+  const auto rest=t.substr(i);
+  std::size_t prefix=0;
+  while (prefix<rest.size()) {
+    const auto c=static_cast<unsigned char>(rest[prefix]);
+    if (!(is_letter(c) || digit(c) || c=='+' || c=='-' || c=='.')) break;
+    ++prefix;
+  }
+  const bool valid_scheme=prefix>0 && is_letter(static_cast<unsigned char>(rest.front())) && rest.substr(prefix).starts_with("://");
+  if (lower_copy(rest.substr(0,4)) == "www." || valid_scheme) {
+    while (end<t.size() && !space(static_cast<unsigned char>(t[end])) &&
+        std::string_view("<>\"'`").find(t[end])==std::string_view::npos && !unicode_punct(t,end)) ++end;
+    while (end>i && std::string_view(".,!?;:").find(t[end-1])!=std::string_view::npos) --end;
+    return end;
+  }
   while (end < t.size() && !space(static_cast<unsigned char>(t[end])) &&
       std::string_view("<>\"'`()[]{}").find(t[end]) == std::string_view::npos && !unicode_punct(t,end)) ++end;
   const auto part = t.substr(i,end-i);
@@ -125,7 +139,7 @@ std::vector<Piece> split_pieces(std::string_view input) {
   for (std::size_t i=0; i<tokens.size(); ++i) {
     const auto& token=tokens[i];
     const bool whitespace=!token.word && !token.frozen && token.text.find_first_not_of(" \t\n")==std::string::npos;
-    if (whitespace && quotes.empty() && (current.empty() || token.text.find('\n')!=std::string::npos)) {
+    if (whitespace && quotes.empty() && current.empty()) {
       flush(); pieces.push_back(Piece{false,token.text,{}}); continue;
     }
     current.push_back(token);
@@ -140,7 +154,7 @@ std::vector<Piece> split_pieces(std::string_view input) {
     bool boundary=quotes.empty() && (terminal(token.text) || (closed && i>0 && terminal(tokens[i-1].text)));
     if (boundary && token.text=="." && i>0 && tokens[i-1].word) {
       const auto w=lower_copy(tokens[i-1].text);
-      if (w.size()==1 || abbrev(w)) boundary=false;
+      if ((w.size()==1 && is_letter(static_cast<unsigned char>(w.front()))) || abbrev(w)) boundary=false;
     }
     if (boundary && i+1<tokens.size()) {
       const auto& next=tokens[i+1];

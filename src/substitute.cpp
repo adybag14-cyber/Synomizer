@@ -227,6 +227,12 @@ bool verb_frame(const Analysis& analysis, const std::vector<Token>& tokens, cons
   if (is_particle(next)) {
     return false;
   }
+  if ((lemma == "remember" || lemma == "recall") && next == "to") return false;
+  if (lemma == "find" || lemma == "locate") {
+    const int after = (next == "it" || is_object_pronoun(next)) ? slot+2 : np_end_slot(tokens, words, slot+1);
+    const auto complement=at_slot(tokens,words,after);
+    if (known_adjective(complement) || is_aux(complement) || looks_like_verb_token(complement)) return false;
+  }
   if (second_np_follows(tokens, words, slot)) {
     return false;
   }
@@ -584,6 +590,11 @@ SubstituteOutcome substitute(std::vector<Token> tokens, const Options& options, 
     }
     std::vector<std::string> usable;
     for (const std::string& synonym : *synonyms) {
+      if (chosen.pos == Pos::Adj && next == "to" &&
+          (chosen.lemma == "likely" || chosen.lemma == "unlikely" || chosen.lemma == "probable" ||
+           chosen.lemma == "improbable" || chosen.lemma == "eager" || chosen.lemma == "enthusiastic")) continue;
+      if (chosen.pos == Pos::Adj && (is_determiner(prev) || known_noun(next)) &&
+          (synonym == "afraid" || synonym == "aware" || synonym == "unwell")) continue;
       if (chosen.pos == Pos::Adj && next == "to" &&
           (chosen.lemma == "happy" || chosen.lemma == "glad" || chosen.lemma == "pleased" || chosen.lemma == "joyful" || chosen.lemma == "cheerful") &&
           synonym != "happy" && synonym != "glad" && synonym != "pleased") continue;

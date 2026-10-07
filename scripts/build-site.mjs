@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 const root = new URL("../", import.meta.url);
@@ -15,5 +16,10 @@ await writeFile(new URL(".nojekyll", site), "");
 const { version } = JSON.parse(await readFile(new URL("package.json", root), "utf8"));
 let commit = "local";
 try { commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: fileURLToPath(root), encoding: "utf8" }).trim(); } catch { /* Source archives need not contain .git. */ }
-await writeFile(new URL("version.json", site), JSON.stringify({ version, commit }) + "\n");
+const sha256 = {};
+for (const name of ["index.html", "styles.css", "app.js", "engine.js", "worker.js", "favicon.svg", "data/lexicon.tsv", "data/phrases.txt", "LICENSE"])
+  sha256[name] = createHash("sha256").update(await readFile(new URL(name, site))).digest("hex");
+const manifest = JSON.stringify({ version, commit, sha256 }, null, 2) + "\n";
+await writeFile(new URL("version.json", site), manifest);
+await writeFile(new URL("build.json", site), manifest);
 console.log(`Built Synomizer ${version} at ${fileURLToPath(site)}`);

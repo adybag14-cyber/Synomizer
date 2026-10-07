@@ -12,8 +12,10 @@
 namespace {
 
 int g_fails = 0;
+int g_checks = 0;
 
 void expect(bool ok, std::string_view name, std::string_view detail = {}) {
+  ++g_checks;
   if (ok) {
     return;
   }
@@ -26,6 +28,7 @@ void expect(bool ok, std::string_view name, std::string_view detail = {}) {
 }
 
 void expect_eq(std::string_view actual, std::string_view wanted, std::string_view name) {
+  ++g_checks;
   if (actual == wanted) {
     return;
   }
@@ -244,10 +247,23 @@ int main() {
   }
   expect(articles_ok, "a/an matches the following sound", article_problem);
 
+  expect_eq(run("She is likely to leave.").text,"She is likely to leave.","infinitive adjective frame");
+  expect(contains(run("She found it difficult.").text,"found it"),"find object-complement frame");
+  expect(contains(run("I remembered to help.").text,"remembered to"),"remember infinitive frame");
+  expect(!contains(run("A frightened child arrived.").text,"afraid"),"predicative adjective not attributive");
+  expect_eq(run("https://happy.example/thing(happy).").text,"https://happy.example/thing(happy).","URL punctuation literal");
+  {
+    synomizer::Options movement; movement.synonyms=false;
+    expect_eq(run("It was an honest and careful person.",movement).text,"It was a careful and honest person.","article after adjective movement");
+    expect_eq(run("She left very quickly.",movement).text,"She left very quickly.","degree adverb scope");
+    expect_eq(run("Because she was late,\nshe left quickly.",movement).text,"Because she was late,\nshe left quickly.","line-wrapped clause");
+    expect_eq(run("Joy left because the bus arrived.",movement).text,"Because the bus arrived, Joy left.","frozen name case");
+  }
+
   if (g_fails != 0) {
     std::cerr << g_fails << " failure(s)\n";
     return EXIT_FAILURE;
   }
-  std::cout << "ok\n";
+  std::cout << "ok (" << g_checks << " assertions)\n";
   return EXIT_SUCCESS;
 }

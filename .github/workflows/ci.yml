@@ -58,6 +58,15 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Build versioned installable ZIP package
+        run: cpack --config build/CPackConfig.cmake -C Release -G ZIP -B packages
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ runner.os }}-${{ runner.arch }}
+          path: packages/*.zip
+          if-no-files-found: error
+          retention-days: 30
+
   sanitizer:
     name: Address and undefined-behaviour sanitizers
     runs-on: ubuntu-latest
@@ -100,8 +109,14 @@ jobs:
             test-results/
           retention-days: 14
 
+      - name: Upload the exact site artifact accepted by all browser projects
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
   pages:
-    name: Deploy GitHub Pages
+    name: Deploy verified site
     needs: [native, sanitizer, browser]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -109,22 +124,44 @@ jobs:
       contents: read
       pages: write
       id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     concurrency:
       group: github-pages
       cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
       - uses: actions/configure-pages@v5
-      - name: Assemble static site, worker and shared word lists
-        run: npm run build:site
-      - uses: actions/upload-pages-artifact@v4
-        with:
-          path: site
       - id: deployment
         uses: actions/deploy-pages@v4
+      - name: Verify deployed commit and every asset hash
+        uses: actions/github-script@v7
+        env:
+          SITE_URL: ${{ steps.deployment.outputs.page_url }}
+        with:
+          script: |
+            const crypto = require('node:crypto');
+            const base = process.env.SITE_URL;
+            const bust = '?verify=' + context.sha;
+            let success = false;
+            for (let attempt = 0; attempt < 12; attempt++) {
+              try {
+                const response = await fetch(new URL('build.json' + bust, base));
+                if (!response.ok) throw new Error(`build.json: ${response.status}`);
+                const build = await response.json();
+                if (build.commit !== context.sha) throw new Error(`Deployment still serves ${build.commit}`);
+                for (const [file, hash] of Object.entries(build.sha256)) {
+                  const asset = await fetch(new URL(file + bust, base));
+                  if (!asset.ok) throw new Error(`${file}: ${asset.status}`);
+                  const actual = crypto.createHash('sha256').update(Buffer.from(await asset.arrayBuffer())).digest('hex');
+                  if (actual !== hash) throw new Error(`${file}: hash mismatch`);
+                }
+                core.info(`Verified ${context.sha} and ${Object.keys(build.sha256).length} live assets.`);
+                success = true;
+                break;
+              } catch (error) {
+                core.info(error.message);
+                await new Promise(resolve => setTimeout(resolve, 10000));
+              }
+            }
+            if (!success) core.setFailed('Deployed site did not match the tested commit and asset hashes.');
