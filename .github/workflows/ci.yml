@@ -16,6 +16,7 @@ concurrency:
 jobs:
   native:
     name: Native / ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -69,6 +70,7 @@ jobs:
 
   sanitizer:
     name: Address and undefined-behaviour sanitizers
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -88,7 +90,15 @@ jobs:
 
   browser:
     name: Browser / Chromium, Firefox, WebKit, mobile
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    # Match package-lock.json. Browsers and Linux libraries are preinstalled,
+    # avoiding runner-specific apt mirror lists and per-run system upgrades.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --user 1001 --ipc=host
+    env:
+      PLAYWRIGHT_IMAGE_VERSION: "1.63.0"
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
@@ -96,9 +106,12 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Install test browsers
-        run: npx playwright install --with-deps chromium firefox webkit
+        timeout-minutes: 3
+      - name: Verify browser image and test-package version match
+        timeout-minutes: 1
+        run: node -e "require('node:assert/strict').equal(require('./node_modules/@playwright/test/package.json').version, process.env.PLAYWRIGHT_IMAGE_VERSION)"
       - name: End-to-end editor tests under the Pages subpath
+        timeout-minutes: 8
         run: npm run test:web
       - uses: actions/upload-artifact@v4
         if: always()
@@ -117,6 +130,7 @@ jobs:
 
   pages:
     name: Deploy verified site
+    timeout-minutes: 10
     needs: [native, sanitizer, browser]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -146,12 +160,13 @@ jobs:
             let success = false;
             for (let attempt = 0; attempt < 12; attempt++) {
               try {
-                const response = await fetch(new URL('build.json' + bust, base));
+                const signal = AbortSignal.timeout(20000);
+                const response = await fetch(new URL('build.json' + bust, base), { signal });
                 if (!response.ok) throw new Error(`build.json: ${response.status}`);
                 const build = await response.json();
                 if (build.commit !== context.sha) throw new Error(`Deployment still serves ${build.commit}`);
                 for (const [file, hash] of Object.entries(build.sha256)) {
-                  const asset = await fetch(new URL(file + bust, base));
+                  const asset = await fetch(new URL(file + bust, base), { signal });
                   if (!asset.ok) throw new Error(`${file}: ${asset.status}`);
                   const actual = crypto.createHash('sha256').update(Buffer.from(await asset.arrayBuffer())).digest('hex');
                   if (actual !== hash) throw new Error(`${file}: hash mismatch`);

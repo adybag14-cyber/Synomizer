@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Synomizer VERSION 1.2.0 LANGUAGES CXX)
+project(Synomizer VERSION 1.2.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -8,9 +8,14 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-  "${CMAKE_CURRENT_SOURCE_DIR}/data/lexicon.tsv" "${CMAKE_CURRENT_SOURCE_DIR}/data/phrases.txt")
+  "${CMAKE_CURRENT_SOURCE_DIR}/data/lexicon.tsv" "${CMAKE_CURRENT_SOURCE_DIR}/data/phrases.txt"
+  "${CMAKE_CURRENT_SOURCE_DIR}/data/rephrases.tsv")
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/data/lexicon.tsv" LEXICON_TSV)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/data/phrases.txt" PHRASES_TXT)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/data/rephrases.tsv" REPHRASES_TSV)
+if (REPHRASES_TSV MATCHES "\\)SYN")
+  message(FATAL_ERROR "data/rephrases.tsv contains the raw-string delimiter )SYN")
+endif()
 
 if (LEXICON_TSV MATCHES "\\)SYN")
   message(FATAL_ERROR "data/lexicon.tsv contains the raw-string delimiter )SYN")
@@ -28,6 +33,7 @@ namespace synomizer::embedded {
 
 inline constexpr std::string_view lexicon_tsv = R\"SYN(${LEXICON_TSV})SYN\";
 inline constexpr std::string_view phrases = R\"SYN(${PHRASES_TXT})SYN\";
+inline constexpr std::string_view rephrases_tsv = R\"SYN(${REPHRASES_TSV})SYN\";
 
 }  // namespace synomizer::embedded
 ")
@@ -42,6 +48,7 @@ add_library(synomizer-lib STATIC
   src/engine.cpp
   src/variants.cpp
   src/phrases.cpp
+  src/adjuncts.cpp
 )
 target_include_directories(synomizer-lib
   PUBLIC include

@@ -195,7 +195,7 @@ struct ArrangeOutcome {
   Change change;
 };
 
-[[nodiscard]] std::optional<ArrangeOutcome> arrange_sentence(const std::vector<Token>& tokens, bool enabled, bool extended = false);
+[[nodiscard]] std::optional<ArrangeOutcome> arrange_sentence(const std::vector<Token>& tokens, bool enabled, bool extended = false, std::uint64_t seed = 1);
 void vary_phrases(std::vector<Token>& tokens, const Options& options, std::vector<Change>& changes);
 void protect_remaining_phrases(std::vector<Token>& tokens);
 
@@ -212,6 +212,8 @@ struct SubstituteOutcome {
 [[nodiscard]] SubstituteOutcome substitute(std::vector<Token> tokens, const Options& options,
                                            std::uint64_t ordinal);
 
+[[nodiscard]] std::vector<Change> rephrase(std::vector<Token>& tokens,
+    const Options& options, std::uint64_t ordinal);
 void fix_articles(std::vector<Token>& tokens, std::vector<Change>& changes);
 
 [[nodiscard]] std::string concat_tokens(const std::vector<Token>& tokens);

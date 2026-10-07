@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { loadResources, rewrite } from "../docs/engine.js";
-const resources = loadResources(readFileSync(new URL("../data/lexicon.tsv", import.meta.url), "utf8"), readFileSync(new URL("../data/phrases.txt", import.meta.url), "utf8"));
+const resources = loadResources(readFileSync(new URL("../data/lexicon.tsv", import.meta.url), "utf8"), readFileSync(new URL("../data/phrases.txt", import.meta.url), "utf8"), readFileSync(new URL("../data/rephrases.tsv", import.meta.url), "utf8"));
 const bin = [process.env.SYNOMIZER_BIN, "build/synomizer", "build/synomizer.exe", "build/Release/synomizer.exe"].find((p) => p && existsSync(p));
 assert.ok(bin, "Build the C++ executable before running these tests");
 const exec = (args = [], text = "") => spawnSync(bin, args, { input: text, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });

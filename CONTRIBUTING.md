@@ -4,19 +4,23 @@ Keep the C++ reference engine and JavaScript browser port behaviourally identica
 
 ## Rules and word lists
 
-`data/lexicon.tsv` contains four tab-separated columns: lemma (or `@group`), part of speech (`noun`, `verb`, `adj`, `adv`), pipe-separated synonyms/members, and a flag (`free`, `careful`, `manner`, `mass`, `quant`, `time`). A group expands in both directions; this is only appropriate when **every** member fits the supported context. A thesaurus relationship alone is not enough. Use directed rows, narrower context rules, or no substitution when senses or grammatical frames differ.
+`data/lexicon.tsv` contains four tab-separated columns: lemma (or `@group`), part of speech (`noun`, `verb`, `adj`, `adv`), pipe-separated synonyms/members, and a flag (`free`, `careful`, `manner`, `mass`, `quant`, `time`, `event`, `disagreement`). A group expands in both directions; this is only appropriate when **every** member fits the supported context. A thesaurus relationship alone is not enough. Use directed rows, narrower context rules, or no substitution when senses or grammatical frames differ.
 
-`free` means eligible at standard intensity, not universally safe. `careful` is eligible only at intensity 2. `manner` entries may be candidates for the separately guarded adverb moves. `mass`, `quant` and `time` have additional grammatical restrictions. `head:noun|noun` restricts an adjective to explicit adjacent noun heads; `object:noun|noun` restricts a verb to a recognized object head. Include positive and near-miss contexts rather than broadening these lists without evidence.
+`free` means eligible at standard intensity, not universally safe. `careful` is eligible only at intensity 2. `manner` entries may be candidates for the separately guarded adverb moves. `mass`, `quant` and `time` have additional grammatical restrictions. `event` verbs require a supported event-object frame; `disagreement` restricts polysemous argument/dispute senses. New flags require matching C++ and JavaScript handling and schema tests. `head:noun|noun` restricts an adjective to explicit adjacent noun heads; `object:noun|noun` restricts a verb to a recognized object head. Include positive and near-miss contexts rather than broadening these lists without evidence.
 
 `@phrase` rows use `front`, `connector` or `purpose` in column two and pipe-separated forms in column three. They are opt-in through Recast mode and have additional position, protection and scope checks. Purpose rules are deliberately one-way. A lexical rule is not a licence to rewrite an idiom containing the same words.
 
 `data/phrases.txt` contains one protected fixed expression per line. Blank lines and `#` comments are ignored. Use lowercase English phrases. User-provided protected terms are separate from this curated list.
 
+`data/rephrases.tsv` has four columns: exact lowercase source phrase, target phrase, position (`edge` or `tail`), and minimum intensity (`0` or `1`). Edge rules require an introductory adjunct followed by a comma or a final adjunct; tail rules match only at the end. They supplement, rather than replace, the Recast `@phrase` rules. Matching lives in `src/adjuncts.cpp` and `docs/engine.js`; emitted tokens are protected from further edits in that pass. Test attachment, quotations, negation, focus modifiers, line breaks, term locks and nominal near misses, not only successful matches.
+
 Only contribute original or appropriately licensed data. Do not scrape and copy proprietary dictionaries. Preserve the Apache-2.0 licence and SPDX notices.
 
 ## Regression requirements
 
-Add a positive example and a near-miss/negative example for each rule. Test unchanged quotations, names, numbers, punctuation and whitespace as applicable. An output matching in both engines is not proof of correctness: include an independent expected result or protected-span assertion. Test multiple seeds, all relevant modes, every returned variant, and reproduction from its recorded seed/profile. Do not treat lexical diversity as a quality or semantic-equivalence score.
+Add a positive example and a near-miss/negative example for each rule. Test unchanged quotations, names, numbers, punctuation and whitespace as applicable. An output matching in both engines is not proof of correctness: include an independent expected result or protected-span assertion. Test multiple seeds, all relevant modes, every returned variant, and reproduction from its recorded seed/profile. Do not treat lexical diversity as a quality or semantic-equivalence score. The bounded generator must not relax intensity, disabled operations or protection settings to fill three slots.
+
+`tests/adjuncts.test.mjs` supplies independent expected outputs and negative grammar cases across every candidate, in addition to existing full batch parity tests. `tests/test_variants.cpp` exercises the public API and bounded malformed-input stress. Both browser comparison suites are retained with current DOM selectors and verify independent card exports as well as selected-result workflows.
 
 Build the native tool, run CTest and `npm test`, then `npm ci` and `npm run test:web` for UI changes (install Playwright browsers first). CI also checks native platforms and sanitizers. Do not loosen an assertion merely to accept an ungrammatical or meaning-changing rewrite.
 

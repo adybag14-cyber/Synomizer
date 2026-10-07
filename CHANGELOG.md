@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.1 - 2026-10-07
+
+- Preserve ambiguous command verbs (`Answer the question`, `Film the event`, `Ship the tool`) rather than substituting noun senses; retain substitutions in explicit noun frames. Add independent native/browser checks for every candidate and profile.
+- Resolve overlapping file imports by the latest file choice, not whichever read finishes first. Controlled browser regressions cover both completion orders.
+- Make browser CI independent of runner package mirrors using the official, version-matched Playwright image with a version-consistency check. Keep bounded job, test and deployment network timeouts without skipping any validation gate.
+
+- Reconcile the parallel three-result implementation with merged 1.2.0, preserving `Style`, `rewrite_variants`, `--variants`, `--style`, audited head/object contexts, phrase indexes, transition rules and existing regression coverage.
+- Show complete text in all three simultaneous cards; provide independent copy/text/JSON downloads and selection-specific full ledgers. Add complete reproduction options to downloaded results while retaining the batch export keys.
+- Strengthen obsolete-worker cancellation and all-card stale-export protection. Bound long-text highlight/ledger rendering without truncating result text or exported changes.
+- Add 23 shared, position- and intensity-guarded manner/frequency adjunct rules; preserve Light touch's no-phrase/no-rearrangement behaviour.
+- Extend Recast medial-adverb movement to supported simple noun-subject clauses, with seeded front/end placement and independent positive/negative regressions.
+- Expand analytic comparative forms, fix singular/plural aircraft selection using explicit number cues, and add guards for help complements, propose-to, try senses, recalls, intransitive decline, noun/verb ambiguity, nominal adjectives, quantity-little and logical arguments.
+- Add event-object vocabulary and technical/fixed-expression protections without weakening the merged head/object restrictions.
+- Retain and port both three-result UI test suites; add independent all-candidate grammar/phrase assertions and native bounded stress checks. Include the new dictionary in all ten fingerprinted deployment assets.
+- Preserve the original Apache-2.0 licence and local-only text processing.
+
 ## 1.2.0 - 2026-10-07
 
 - Offer three simultaneous Balanced, Light touch and Restructured candidates with selection-specific text, ledger, copy/download and complete batch JSON export.

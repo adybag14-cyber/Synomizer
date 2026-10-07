@@ -1,0 +1,26 @@
+# source<TAB>replacement<TAB>position (edge or tail)<TAB>minimum intensity (0 or 1)
+# Exact wording only. No quotes, protected terms, negation/focus or embedded clauses.
+# Edge requires a fronted adjunct with comma or a final adjunct and one predicate.
+in a careful manner	carefully	edge	0
+in a cautious manner	cautiously	edge	0
+in a polite manner	politely	edge	0
+in a courteous manner	courteously	edge	0
+in a quiet manner	quietly	edge	0
+in a rapid manner	rapidly	edge	0
+in an efficient manner	efficiently	edge	0
+in a deliberate manner	deliberately	edge	0
+in an intentional manner	intentionally	edge	0
+on a daily basis	daily	edge	1
+on a weekly basis	weekly	edge	1
+on a monthly basis	monthly	edge	1
+on a yearly basis	yearly	edge	1
+on an annual basis	annually	edge	1
+at the present time	currently	edge	1
+at this moment	now	edge	1
+with care	carefully	edge	0
+with caution	cautiously	edge	0
+carefully	with care	tail	0
+cautiously	with caution	tail	0
+politely	in a polite manner	tail	0
+daily	on a daily basis	tail	1
+weekly	on a weekly basis	tail	1

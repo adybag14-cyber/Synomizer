@@ -16,7 +16,7 @@ test('shared lexical rules have valid, unambiguous schemas',()=>{
       continue;
     }
     assert.ok(['adj','adv','noun','verb'].includes(pos));
-    assert.match(flag,/^(free|careful|manner|mass|quant|time|(?:head|object):[a-z]+(?:\|[a-z]+)*)$/);
+    assert.match(flag,/^(free|careful|manner|mass|quant|time|event|disagreement|(?:head|object):[a-z]+(?:\|[a-z]+)*)$/);
     for(const word of words)assert.match(word,/^[a-z]+(?:-[a-z]+)*$/);
     for(const lemma of name==='@group'?words:[name]){
       const key=`${lemma}/${pos}`;assert.ok(!seen.has(key),`duplicate ${key}`);seen.add(key);

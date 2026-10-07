@@ -1,6 +1,6 @@
 # lemma table for Synomizer. Groups expand so each member lists the others.
 # Columns: @group, pos, member|member, flag    OR    lemma, pos, synonym|synonym, flag
-# Flags: free, careful, manner, mass, quant, time
+# Flags: free, careful, manner, mass, quant, time, event, disagreement, head:..., object:...
 
 @group	adj	happy|glad|pleased|joyful|cheerful	free
 @group	adj	sad|unhappy|sorrowful	free
@@ -157,7 +157,7 @@ numerous	adj	many	quant
 @group	noun	pain|ache	free
 @group	noun	meeting|assembly	free
 @group	noun	agreement|pact|accord	free
-@group	noun	argument|dispute|quarrel	free
+@group	noun	argument|dispute|quarrel	disagreement
 @group	noun	buyer|purchaser	free
 @group	noun	seller|vendor	free
 @group	noun	illness|sickness|ailment	free
@@ -272,3 +272,14 @@ usage	noun	use	free
 @group	noun	luggage|baggage	mass
 
 @group	verb	consume|eat	object:food|meal|meals|breakfast|lunch|dinner|cake|sandwich|bread|pizza|apple|apples|rice|snack|snacks|fish|beef|fruit|vegetables|soup
+
+# Additional guarded contexts and vocabulary.
+@group	adj	unavoidable|inevitable	free
+@group	adj	unambiguous|unequivocal	free
+@group	adv	deliberately|intentionally	manner
+@group	adv	annually|yearly	free
+@group	noun	obstacle|hindrance	free
+@group	noun	constraint|restriction	free
+@group	noun	assumption|supposition	free
+@group	verb	finish|complete	event
+@group	verb	postpone|defer	event

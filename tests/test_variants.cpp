@@ -34,5 +34,20 @@ int main() {
   legacy.synonyms=false;legacy.arrange=false;
   const auto off=rewrite_variants(input,legacy);
   expect(off.variants.size()==1 && off.attempts==1 && off.variants[0].result.text==input,"disabled operations fast path");
+  std::uint64_t state=42;
+  constexpr std::string_view alphabet="abcXYZ '.,?![]()\n\t123";
+  for(int trial=0;trial<100;++trial) {
+    std::string text;
+    for(int j=0;j<100;++j) { state=state*6364136223846793005ULL+1; text+=alphabet[state%alphabet.size()]; }
+    const auto stress=rewrite_variants(text);
+    expect(!stress.variants.empty() && stress.variants.size()<=3 && stress.attempts<=12,"bounded malformed-input stress");
+    for(const auto& v:stress.variants) {
+      Options settings;settings.seed=v.seed;settings.style=v.style;
+      expect(rewrite(text,settings).text==v.result.text,"stress replay from original");
+    }
+  }
+  expect(rewrite("The aircraft were ready.").text=="The airplanes were prepared.","plural aircraft agreement");
+  expect(rewrite("An aircraft was ready.").text=="An airplane was prepared.","singular aircraft agreement");
+  expect(rewrite("She worked in a careful manner.").text=="She worked carefully.","guarded adjunct contraction");
   return failures?1:0;
 }

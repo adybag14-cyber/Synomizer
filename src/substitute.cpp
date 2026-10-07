@@ -227,6 +227,28 @@ bool verb_frame(const Analysis& analysis, const std::vector<Token>& tokens, cons
   if (is_particle(next)) {
     return false;
   }
+  if ((lemma == "suggest" || lemma == "propose") && next == "to") return false;
+  if ((lemma == "try" || lemma == "attempt") && next != "to" &&
+      !(next.ends_with("ing") && looks_like_verb_token(next))) return false;
+  if (lemma == "decline" && (next.empty() || is_preposition(next) || is_known_adverb_word(next)) && next != "to") return false;
+  if (lemma == "recall" && (next == "that" || next == "the" || next == "a")) {
+    static const std::unordered_set<std::string_view> recalled_objects = {"car", "cars", "vehicle", "vehicles", "product", "products", "drug", "drugs", "medicine", "medicines"};
+    const int end = np_end_slot(tokens, words, slot + 1);
+    if (recalled_objects.contains(at_slot(tokens, words, end - 1))) return false;
+  }
+  if (lemma == "help" || lemma == "assist" || lemma == "aid") {
+    if (next == "to") return false;
+    if (!next.empty() && !is_preposition(next)) {
+      const int end = is_object_pronoun(next) || next == "it" ? slot + 2 : np_end_slot(tokens, words, slot + 1);
+      const auto following = at_slot(tokens, words, end);
+      if (!following.empty() && following != "with" && following != "in" && !is_coordinator(following)) return false;
+    }
+  }
+  if (analysis.flag == "event") {
+    if (next.empty()) return analysis.features.participle && be_form(prev);
+    if (is_preposition(next) || is_aux(next) || next == "that") return false;
+    return event_frame(tokens, words, slot);
+  }
   if ((lemma == "remember" || lemma == "recall") && next == "to") return false;
   if (lemma == "find" || lemma == "locate") {
     const int after = (next == "it" || is_object_pronoun(next)) ? slot+2 : np_end_slot(tokens, words, slot+1);
@@ -609,7 +631,41 @@ SubstituteOutcome substitute(std::vector<Token> tokens, const Options& options, 
     if (winner == nullptr || tied) {
       continue;
     }
-    const Analysis chosen = kept.front();
+    Analysis chosen = kept.front();
+    if (chosen.pos == Pos::Noun && chosen.lemma == "aircraft") {
+      static const std::unordered_set<std::string_view> plurals = {"many", "several", "multiple", "these", "those", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "both", "all", "numerous"};
+      static const std::unordered_set<std::string_view> singulars = {"a", "an", "one", "this", "that", "each", "every"};
+      auto number_cue = prev;
+      for (int k = slot-2; k >= 0 && k >= slot-5 && !plurals.contains(number_cue) &&
+          (known_adjective(number_cue) || is_known_adverb_word(number_cue)); --k) number_cue = at_slot(context, words, k);
+      const bool digits = !number_cue.empty() && number_cue.find_first_not_of("0123456789") == std::string::npos;
+      const bool singular_number = digits && number_cue.find_first_not_of('0') != std::string::npos &&
+        number_cue.substr(number_cue.find_first_not_of('0')) == "1";
+      const bool plural = plurals.contains(number_cue) || (digits && !singular_number) || next == "are" || next == "were" || next == "have";
+      const bool singular = singulars.contains(number_cue) || singular_number || next == "is" || next == "was" || next == "has";
+      if (plural == singular) continue; // Ambiguous or conflicting number: keep aircraft.
+      chosen.features.plural = plural;
+    }
+    // A lexicon noun may be functioning as a verb ("students question the result").
+    static const std::unordered_set<std::string_view> noun_verbs = {
+      "question", "answer", "picture", "film", "shop", "store", "ship", "cause", "lie", "part", "tool", "border"};
+    if (chosen.pos == Pos::Noun && noun_verbs.contains(chosen.lemma)) {
+      // Sentence-initial position alone does not establish a noun: "Answer
+      // the question" is a command. Nor does the preposition in "Lie to ...".
+      const bool noun_cue = is_determiner(prev) || is_preposition(prev) || known_adjective(prev) ||
+        prev.ends_with("'s") || prev.ends_with("s'") || (next != "to" && looks_like_verb_token(next));
+      if (!noun_cue) continue;
+    }
+    // Nominal "a cold" / "a fake" is not an attributive adjective.
+    if (chosen.pos == Pos::Adj && is_determiner(prev) &&
+        (next.empty() || is_preposition(next) || looks_like_verb_token(next))) continue;
+    if (chosen.pos == Pos::Adj && chosen.lemma == "little") {
+      static const std::unordered_set<std::string_view> mass = {
+        "money", "cash", "time", "water", "food", "milk", "evidence", "information", "patience", "help", "assistance", "attention", "hope"};
+      if (mass.contains(next) || known_adjective(next) || is_known_adverb_word(next)) continue;
+    }
+    if (chosen.flag == "disagreement" && chosen.lemma != "quarrel" &&
+        prev != "heated" && prev != "bitter" && prev != "verbal" && prev != "petty" && prev != "protracted") continue;
     if (!context_allows(chosen, context, words, slot)) continue;
     if (chosen.lemma == "however" && (static_cast<std::size_t>(words[static_cast<std::size_t>(slot)] + 1) >= outcome.tokens.size() || outcome.tokens[static_cast<std::size_t>(words[static_cast<std::size_t>(slot)] + 1)].text != ",")) continue;
     if (chosen.pos == Pos::Adv && (chosen.lemma == "nearly" || chosen.lemma == "almost") && (next == "no" || next == "not" || next == "never")) continue;
@@ -641,6 +697,18 @@ SubstituteOutcome substitute(std::vector<Token> tokens, const Options& options, 
     }
     std::vector<std::string> usable;
     for (const std::string& synonym : *synonyms) {
+      if (chosen.pos == Pos::Adj && (synonym == "afraid" || synonym == "aware" || synonym == "unwell") &&
+          !be_form(cue) && cue != "seem" && cue != "seems" && cue != "seemed" && cue != "feel" && cue != "feels" &&
+          cue != "felt" && cue != "remain" && cue != "remained" && cue != "stay" && cue != "stayed") continue;
+
+      if (chosen.pos == Pos::Adj && next == "to" &&
+          (chosen.lemma == "likely" || chosen.lemma == "unlikely" || chosen.lemma == "probable" ||
+           chosen.lemma == "improbable" || chosen.lemma == "eager" || chosen.lemma == "enthusiastic")) continue;
+      if (chosen.pos == Pos::Adj && (is_determiner(prev) || known_noun(next)) &&
+          (synonym == "afraid" || synonym == "aware" || synonym == "unwell")) continue;
+      if (chosen.pos == Pos::Adj && next == "to" &&
+          (chosen.lemma == "happy" || chosen.lemma == "glad" || chosen.lemma == "pleased" || chosen.lemma == "joyful" || chosen.lemma == "cheerful") &&
+          synonym != "happy" && synonym != "glad" && synonym != "pleased") continue;
       if (chosen.pos == Pos::Adj && next == "to" &&
           (chosen.lemma == "likely" || chosen.lemma == "unlikely" || chosen.lemma == "probable" ||
            chosen.lemma == "improbable" || chosen.lemma == "eager" || chosen.lemma == "enthusiastic")) continue;

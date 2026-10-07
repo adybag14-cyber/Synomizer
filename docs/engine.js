@@ -19,7 +19,6 @@ const VERBS = [
 ];
 
 const NOUNS = [
-  ["aircraft", "aircraft"],
   ["child", "children"], ["person", "people"], ["man", "men"], ["woman", "women"],
   ["mouse", "mice"], ["goose", "geese"], ["tooth", "teeth"], ["foot", "feet"], ["ox", "oxen"],
 ];
@@ -45,6 +44,7 @@ const TIME_NOUNS = setOf("visit meeting pause delay period stay trip journey sum
 const EVENT_NOUNS = setOf("meeting show process work journey trip discussion class game story day war project session event operation trial experiment lecture movie film match season ceremony party interview negotiation debate search investigation construction production course lesson practice training attack battle conflict task assignment activity exercise report letter chapter song piece job plan question problem answer account article essay message book review summary introduction conclusion agreement argument fight accident injury method procedure conversation program tour flight visit walk talk speech sale service");
 const ABBREV = setOf("mr mrs ms dr prof sr jr st vs etc eg ie am pm fig vol gen col capt rev hon dept approx");
 const F_VES = new Set(["leaf", "loaf", "wife", "life", "knife", "wolf", "half", "calf", "shelf", "self", "thief"]);
+const ANALYTIC_GRADE = new Set("careful cautious cheerful joyful pleased sorrowful unhappy irate angry clever intelligent powerful beautiful lovely attractive difficult challenging important significant useful helpful polite courteous brave courageous expensive costly reliable dependable concise succinct enormous immense obvious evident apparent complicated intricate peaceful tranquil eager enthusiastic tired weary frightened scared generous charitable considerate thoughtful serious solemn funny amusing humorous boring tedious interesting engaging common ordinary rare uncommon distant remote pleasant awful terrible wonderful marvelous grateful thankful busy occupied prepared wide broad similar comparable different distinct short brief strong weak frail easy simple small big large safe secure".split(" "));
 const DOUBLE_GRADE = new Set(["big", "hot", "sad", "thin", "fat", "red", "dim", "wet", "fit"]);
 
 function lower(text) {
@@ -154,7 +154,7 @@ function keyOf(lemma, pos) {
   return `${lemma}\0${pos}`;
 }
 
-export function loadResources(lexiconTsv, phrasesText) {
+export function loadResources(lexiconTsv, phrasesText, rephrasesTsv = "") {
   const rows = new Map();
   const phraseRules = [];
   const byLemma = new Map();
@@ -199,7 +199,12 @@ export function loadResources(lexiconTsv, phrasesText) {
     addPhrase(phraseIndex, phrase);
     if (!variableForms.has(phrase.join(" "))) addPhrase(fixedPhraseIndex, phrase);
   }
-  return { rows, byLemma, phrases, phraseRules, phraseIndex, fixedPhraseIndex };
+  const rephrases = rephrasesTsv.split(/\r?\n/).filter((line) => line && !line.startsWith("#")).map((line) => {
+    const [source, target, position, minimum] = line.split("\t");
+    if (!source || !target || (!["tail", "edge"].includes(position) || !["0", "1"].includes(minimum))) throw new TypeError("Invalid phrase rule.");
+    return { source: source.split(" "), target, tailOnly: position === "tail", minimumIntensity: Number(minimum) };
+  }).sort((a, b) => b.source.length - a.source.length);
+  return { rows, byLemma, phrases, phraseRules, phraseIndex, fixedPhraseIndex, rephrases };
 }
 
 function findRow(resources, lemma, pos) {
@@ -276,6 +281,7 @@ function regularThird(lemma) {
 }
 
 function regularPlural(lemma) {
+  if (lemma === "aircraft") return "aircraft";
   if (F_VES.has(lemma)) {
     if (lemma.endsWith("fe")) return `${lemma.slice(0, -2)}ves`;
     return `${lemma.slice(0, -1)}ves`;
@@ -291,8 +297,11 @@ function inflect(lemma, pos, features) {
     return lemma;
   }
   if (pos === "adj") {
-    if (features.comparative || features.superlative) return grade(lemma, features.superlative) ||
-        (["cheerful", "joyful", "pleased", "sorrowful", "intelligent", "powerful", "attractive", "cautious"].includes(lemma) ? `${features.superlative ? "most" : "more"} ${lemma}` : null);
+    if (features.comparative || features.superlative) {
+      const form = grade(lemma, features.superlative);
+      if (form) return form;
+      return ANALYTIC_GRADE.has(lemma) ? `${features.superlative ? "most" : "more"} ${lemma}` : null;
+    }
     if (features.plural || features.past || features.gerund || features.third) return null;
     return lemma;
   }
@@ -875,7 +884,7 @@ function tryMedialAdverb(resources, tokens, words) {
   return finish(result, concat(tokens), "Moved an unmodified medial manner adverb to the end");
 }
 
-function arrange(resources, tokens, enabled, extended = false) {
+function arrange(resources, tokens, enabled, extended = false, seed = 1) {
   const scope = new Set("not never no neither nor only just hardly scarcely barely if unless whether that which who whom whose where why how while to without can could may might must shall should will would cannot say says said tell tells told know knows knew think thinks thought believe believes believed wonder wonders wondered very too so quite rather almost nearly less more least most enough especially particularly".split(" "));
   let subordinators = 0, commas = 0, thirdPerson = false;
   for (const token of tokens) {
@@ -890,7 +899,7 @@ function arrange(resources, tokens, enabled, extended = false) {
   }
   if (!enabled || subordinators > 1 || commas > 1 || (subordinators && thirdPerson)) return null;
   const words = wordPositions(tokens);
-  return tryClause(resources, tokens, words) || (extended && tryMedialAdverb(resources, tokens, words)) || tryAdverb(resources, tokens, words) || tryAdjectives(resources, tokens, words);
+  return tryClause(resources, tokens, words) || (extended && tryMedialAdverb(resources, tokens, words)) || tryAdverb(resources, tokens, words) || (extended && tryNounSubjectAdverb(resources, tokens, words, seed)) || tryAdjectives(resources, tokens, words);
 }
 
 function fnv1a(text) {
@@ -1011,6 +1020,27 @@ function verbFrame(resources, analysis, tokens, words, slot, prev) {
   }
   const next = atSlot(tokens, words, slot + 1);
   if (PARTICLES.has(next)) return false;
+  if (["suggest", "propose"].includes(lemma) && next === "to") return false;
+  if (["try", "attempt"].includes(lemma) && next !== "to" && !(next.endsWith("ing") && looksLikeVerb(resources, next))) return false;
+  if (lemma === "decline" && (!next || PREPS.has(next) || knownAdverb(resources, next)) && next !== "to") return false;
+  if (lemma === "recall" && ["that", "the", "a"].includes(next)) {
+    const end = npEnd(resources, tokens, words, slot + 1);
+    if (["car", "cars", "vehicle", "vehicles", "product", "products", "drug", "drugs", "medicine", "medicines"].includes(atSlot(tokens, words, end - 1))) return false;
+  }
+  if (["help", "assist", "aid"].includes(lemma)) {
+    if (next === "to") return false;
+    if (next && !PREPS.has(next)) {
+      const end = OBJECTS.has(next) || next === "it" ? slot + 2 : npEnd(resources, tokens, words, slot + 1);
+      const following = atSlot(tokens, words, end);
+      if (following && following !== "with" && following !== "in" && !coordinator(following)) return false;
+    }
+  }
+  if (analysis.flag === "event") {
+    if (!next) return analysis.features.participle && BE.has(prev);
+    if (PREPS.has(next) || AUX.has(next) || next === "that") return false;
+    return eventFrame(resources, tokens, words, slot);
+  }
+
   if (['remember','recall'].includes(lemma) && next==='to') return false;
   if (['find','locate'].includes(lemma)) {
     const after=(next==='it' || OBJECTS.has(next)) ? slot+2 : npEnd(resources,tokens,words,slot+1);
@@ -1200,7 +1230,29 @@ function substitute(resources, tokens, options, ordinal) {
       }
     }
     if (!best || tied) continue;
-    const chosen = kept[0];
+    const chosen = { ...kept[0], features: { ...kept[0].features } };
+    if (chosen.pos === "noun" && chosen.lemma === "aircraft") {
+      const plurals = new Set("many several multiple these those two three four five six seven eight nine ten both all numerous".split(" "));
+      const singulars = new Set("a an one this that each every".split(" "));
+      let numberCue = prev;
+      for (let k = slot-2; k >= 0 && k >= slot-5 && !plurals.has(numberCue) &&
+        (knownAdjective(resources, numberCue) || knownAdverb(resources, numberCue)); k--) numberCue = atSlot(context, words, k);
+      const digits = /^[0-9]+$/.test(numberCue), singularNumber = digits && numberCue.replace(/^0+/, "") === "1";
+      const plural = plurals.has(numberCue) || (digits && !singularNumber) || ["are", "were", "have"].includes(next);
+      const singular = singulars.has(numberCue) || singularNumber || ["is", "was", "has"].includes(next);
+      if (plural === singular) continue;
+      chosen.features.plural = plural;
+    }
+    if (chosen.pos === "noun" && ["question", "answer", "picture", "film", "shop", "store", "ship", "cause", "lie", "part", "tool", "border"].includes(chosen.lemma)) {
+      // Commands such as "Answer the question" and "Lie to ..." have no noun cue.
+      const nounCue = DETERMINERS.has(prev) || PREPS.has(prev) || knownAdjective(resources, prev) ||
+        prev.endsWith("'s") || prev.endsWith("s'") || (next !== "to" && looksLikeVerb(resources, next));
+      if (!nounCue) continue;
+    }
+    if (chosen.pos === "adj" && DETERMINERS.has(prev) && (!next || PREPS.has(next) || looksLikeVerb(resources, next))) continue;
+    if (chosen.pos === "adj" && chosen.lemma === "little" &&
+      (["money", "cash", "time", "water", "food", "milk", "evidence", "information", "patience", "help", "assistance", "attention", "hope"].includes(next) || knownAdjective(resources, next) || knownAdverb(resources, next))) continue;
+    if (chosen.flag === "disagreement" && chosen.lemma !== "quarrel" && !["heated", "bitter", "verbal", "petty", "protracted"].includes(prev)) continue;
     if (!contextAllows(resources, chosen, context, words, slot)) continue;
     if (chosen.lemma === "however" && tokens[words[slot] + 1]?.text !== ",") continue;
     if (chosen.pos === "adv" && ["nearly", "almost"].includes(chosen.lemma) && ["no", "not", "never"].includes(next)) continue;
@@ -1217,6 +1269,12 @@ function substitute(resources, tokens, options, ordinal) {
     if (!row) continue;
     const usable = [];
     for (const synonym of row.synonyms) {
+      if (chosen.pos === "adj" && ["afraid", "aware", "unwell"].includes(synonym) &&
+        !BE.has(cue) && !["seem", "seems", "seemed", "feel", "feels", "felt", "remain", "remained", "stay", "stayed"].includes(cue)) continue;
+
+      if (chosen.pos==='adj' && next==='to' && ['likely','unlikely','probable','improbable','eager','enthusiastic'].includes(chosen.lemma)) continue;
+      if (chosen.pos==='adj' && (DETERMINERS.has(prev) || knownNoun(resources,next)) && ['afraid','aware','unwell'].includes(synonym)) continue;
+      if (chosen.pos === "adj" && next === "to" && ["happy", "glad", "pleased", "joyful", "cheerful"].includes(chosen.lemma) && !["happy", "glad", "pleased"].includes(synonym)) continue;
       if (chosen.pos==='adj' && next==='to' && ['likely','unlikely','probable','improbable','eager','enthusiastic'].includes(chosen.lemma)) continue;
       if (chosen.pos==='adj' && (DETERMINERS.has(prev) || knownNoun(resources,next)) && ['afraid','aware','unwell'].includes(synonym)) continue;
       if (chosen.pos === "adj" && next === "to" && ["happy", "glad", "pleased", "joyful", "cheerful"].includes(chosen.lemma) && !["happy", "glad", "pleased"].includes(synonym)) continue;
@@ -1281,7 +1339,7 @@ export function rewrite(input, options = {}, resources) {
   if (typeof input !== "string") throw new TypeError("Input must be text.");
   if (!resources?.rows || !resources?.byLemma) throw new TypeError("Load the word lists before rewriting.");
   const rawSeed = options.seed ?? 1;
-  if ((typeof rawSeed === "number" && !Number.isSafeInteger(rawSeed)) || !/^[0-9]+$/.test(String(rawSeed)) || BigInt(rawSeed) > MASK) throw new RangeError("Seed must be an unsigned 64-bit integer (pass large values as text).");
+  if (!["string", "number", "bigint"].includes(typeof rawSeed) || String(rawSeed).length > 20 || (typeof rawSeed === "number" && !Number.isSafeInteger(rawSeed)) || !/^[0-9]+$/.test(String(rawSeed)) || BigInt(rawSeed) > MASK) throw new RangeError("Seed must be an unsigned 64-bit integer (pass large values as text).");
   if (options.intensity !== undefined && !Number.isInteger(options.intensity)) throw new RangeError("Intensity must be an integer.");
   if (options.protectedTerms !== undefined && (!Array.isArray(options.protectedTerms) || options.protectedTerms.some((term) => typeof term !== "string"))) throw new TypeError("Protected terms must be a list of strings.");
   if (options.style !== undefined && !["balanced", "close", "recast"].includes(options.style)) throw new RangeError("Style must be balanced, close, or recast.");
@@ -1307,9 +1365,12 @@ export function rewrite(input, options = {}, resources) {
     freezePhrases(resources, tokens, settings.style === "recast" && settings.synonyms && settings.intensity > 0);
     freezeNames(resources, tokens);
     const locked = freezeTerms(tokens, options.protectedTerms || []);
-    if (!locked) varyPhrases(resources, tokens, settings, result.changes);
+    if (!locked) {
+      for (const change of rephrase(resources, tokens, settings, ordinal)) result.changes.push(change);
+      varyPhrases(resources, tokens, settings, result.changes);
+    }
     if (settings.style === "recast") freezePhrases(resources, tokens);
-    const arranged = arrange(resources, tokens, settings.arrange && !locked && settings.style !== "close", settings.style === "recast");
+    const arranged = arrange(resources, tokens, settings.arrange && !locked && settings.style !== "close", settings.style === "recast", settings.seed);
     if (arranged) {
       tokens = arranged.tokens;
       result.changes.push(arranged.change);
@@ -1418,4 +1479,92 @@ export function rewriteVariants(input, options = {}, resources, count = 3) {
   }
   if (!batch.variants.length) add(first);
   return batch;
+}
+
+const PHRASE_SCOPE = new Set("not never no only just almost nearly hardly scarcely barely very too rather quite more most less least enough if whether that who which whose why how by".split(" "));
+const PHRASE_VERBS = new Set("works worked reads studies studied exercises exercised visits visited meets writes travels travelled traveled spoke speaks smiled smiles walked walks".split(" "));
+function phraseFits(resources, tokens, begin, end, tailOnly) {
+  const front = begin === 0 && tokens[end]?.text === ",";
+  const tail = tokens.slice(end).every((t) => t.text === "." || /^[ \t]*$/.test(t.text));
+  if ((!front && !tail) || (tailOnly && !tail)) return false;
+  if (tailOnly && begin >= 2 && DETERMINERS.has(lower(tokens[begin-2].text))) return false;
+  let predicate = false, lexical = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    if (i >= begin && i < end) continue;
+    const token = tokens[i], w = lower(token.text);
+    if (w.includes("\n") || PHRASE_SCOPE.has(w) || w.includes("n't") || subordinatorWord(w) || coordinator(w)) return false;
+    if (!token.word) {
+      if (w === "." || (front && i === end) || /^[ \t]*$/.test(w)) continue;
+      return false;
+    }
+    if (token.frozen) continue;
+    if (AUX.has(w)) { predicate = true; continue; }
+    const prev = i >= 2 ? lower(tokens[i-2].text) : "";
+    if (!DETERMINERS.has(prev) && (looksLikeVerb(resources, w) || PHRASE_VERBS.has(w))) { predicate = true; lexical++; }
+  }
+  return predicate && lexical <= 1;
+}
+function rephrase(resources, tokens, options, ordinal) {
+  const changes = [];
+  if (!options.synonyms || options.style === "close") return changes;
+  for (let i = 0; i < tokens.length; i++) {
+    if (!tokens[i].word || tokens[i].frozen) continue;
+    for (const rule of resources.rephrases || []) {
+      if (options.intensity < rule.minimumIntensity) continue;
+      const size = rule.source.length * 2 - 1;
+      if (i + size > tokens.length) continue;
+      let match = true;
+      for (let k = 0; k < size; k++) {
+        const token = tokens[i+k];
+        if (token.frozen || (k % 2 ? token.text !== " " : !token.word || lower(token.text) !== rule.source[k/2])) { match = false; break; }
+      }
+      if (!match || !phraseFits(resources, tokens, i, i+size, rule.tailOnly)) continue;
+      const before = concat(tokens.slice(i, i+size));
+      const after = applyCaps(rule.target, tokens[i].text), replacement = [];
+      for (const word of after.split(" ")) {
+        if (replacement.length) replacement.push({ text: " ", word: false, frozen: true, replaced: false });
+        replacement.push({ text: word, word: true, frozen: true, replaced: true });
+      }
+      changes.push({ kind: "phrase", before, after, detail: "Matched adjunct phrase" });
+      tokens.splice(i, size, ...replacement); i += replacement.length-1; break;
+    }
+  }
+  return changes;
+}
+
+function tryNounSubjectAdverb(resources, tokens, words, seed) {
+  const verbs = new Set("examine inspect purchase buy select choose construct build repair mend finish complete".split(" "));
+  if (words.length < 4) return null;
+  const punct = punctIndex(tokens), limit = punct < 0 ? tokens.length : punct;
+  let predicates = 0;
+  for (const i of words) {
+    if (AUX.has(lower(tokens[i].text))) return null;
+    if (looksLikeVerb(resources, tokens[i].text)) predicates++;
+  }
+  if (predicates !== 1 || words.some((i) => coordinator(lower(tokens[i].text)))) return null;
+  for (let slot = 1; slot + 2 < words.length; slot++) {
+    const at = words[slot], verbAt = words[slot+1];
+    if (!manner(resources, tokens[at]) || verbAt !== at+2 || tokens[at+1].text !== " ") continue;
+    if (!analyze(resources, tokens[verbAt].text, false).some((a) => a.pos === "verb" && verbs.has(a.lemma))) continue;
+    let simple = true;
+    for (let k = 0; k < words.length; k++) {
+      if (k === slot || k === slot+1) continue;
+      const w = lower(tokens[words[k]].text);
+      if (PREPS.has(w) || subordinatorWord(w) || knownAdverb(resources, w) ||
+        (w.endsWith("ing") && !findRow(resources, w, "noun"))) simple = false;
+    }
+    if (!simple) continue;
+    const body = sliceTokens(tokens, 0, at);
+    appendSlice(body, sliceTokens(tokens, verbAt, limit));
+    const adverb = { ...tokens[at] };
+    let rebuilt;
+    if (BigInt(seed) % 2n === 0n) {
+      decapFirst(resources, body); adverb.text = applyCaps(lower(adverb.text), "A");
+      rebuilt = [adverb, { text: ",", word: false, frozen: false, replaced: false }];
+      appendSlice(rebuilt, body);
+    } else { rebuilt = body; appendSlice(rebuilt, [adverb]); }
+    if (punct >= 0) rebuilt.push({ ...tokens[punct] });
+    return finish(rebuilt, concat(tokens), "Moved a pre-verbal manner adverb");
+  }
+  return null;
 }

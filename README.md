@@ -10,15 +10,17 @@ The same text, seed, options **and engine/word-list version** produce the same o
 
 [Open Synomizer](https://adybag14-cyber.github.io/Synomizer/).
 
-Paste or import a UTF-8 `.txt` or `.md` file. The original stays on the left; the rewrite, highlighted substitutions and change ledger appear alongside it. **Another variation** increments the seed and always rewrites the original, not the previous result. Copy the result, download a plain-text file, or export the structured JSON change log.
+Paste or import a UTF-8 `.txt` or `.md` file and choose **Create 3 variations**. Your original stays above up to three complete, distinct results. They appear side by side on desktop and stack on a phone. Each card has its own copy, text download, JSON change-log download, seed/profile and change counts. **Use this** selects the result used by the shared change ledger and selected-result export controls. Selection never overwrites the original.
+
+**New set** advances the base seed and always rewrites the original, not a previous result. **Download all variations** exports the original plus all complete results, their reproduction options, change records and selected index. Different seeds can still find some of the same wording.
 
 The controls include independent synonym and sentence-move switches, three intensity levels, quotation protection, and a **protected-terms** field. Enter one word or phrase per line to keep names and specialist terminology unchanged. Matching is case-insensitive and whole-word, with literal spacing inside a phrase; a sentence containing a matched term is not rearranged.
 
-Processing happens in a cancellable Web Worker. The browser accepts up to **200,000 characters**, and up to 200 protected terms of at most 200 characters each. Longer files can use the native CLI. Invalid input clears the obsolete result and disables exports instead of silently copying an older rewrite. `Ctrl/Cmd + Enter` runs a rewrite.
+Processing happens in a cancellable Web Worker. The browser accepts up to **200,000 characters**, and up to 200 protected terms of at most 200 characters each. Longer files can use the native CLI. Invalid input clears every obsolete result and disables all selected/card exports. Editing during generation terminates the old search; retired workers cannot publish stale batches. `Ctrl/Cmd + Enter` runs a rewrite.
 
 ### Privacy
 
-Text is processed locally in the browser. There are no accounts, analytics, external fonts or rewriting API calls. Text and settings are not saved by the app after a reload. The page and its word lists are initially fetched from GitHub Pages, and normal hosting access logs still apply. Importing a text file does not upload it. Downloaded files contain the result and, for JSON, the selected options and change records.
+Text is processed locally in the browser. There are no accounts, analytics, external fonts or rewriting API calls. Text and settings are not saved by the app after a reload. The page and its word lists are initially fetched from GitHub Pages, and normal hosting access logs still apply. Importing a text file does not upload it. Selected-result JSON contains the result, profile, exact options and change records. All-variations JSON also includes the original; share it only when you intend to share that original.
 
 The browser implementation is JavaScript, **not a native C++ executable or WebAssembly build**. It mirrors the C++ reference rules and reads the same versioned data files. Cross-engine tests compare both rewritten text and complete change records, including full-width 64-bit seeds.
 
@@ -41,7 +43,7 @@ cmake --install build --config Release --prefix ./install
 cpack --config build/CPackConfig.cmake -C Release -G ZIP -B packages
 ```
 
-The native executable embeds the lexicon and phrase list and does not need a network connection or external dictionary files at runtime. Changing either data file automatically triggers CMake to reconfigure on the next build.
+The native executable embeds the lexicon, protected-expression list and adjunct-rewrite table and does not need a network connection or external dictionary files at runtime. Changing any of the three data files automatically triggers CMake to reconfigure on the next build.
 
 ## Command-line use
 
@@ -68,11 +70,11 @@ On Windows, substitute the executable path appropriate to your CMake generator.
 | Option | Behaviour |
 | --- | --- |
 | `--seed N`, `-s N` | Unsigned decimal integer from 0 to 18446744073709551615; default 1. |
-| `--intensity 0`, `-i 0` | Light: eligible adjectives and manner adverbs only. |
+| `--intensity 0`, `-i 0` | Light: eligible adjectives, manner adverbs and guarded manner-adjunct rewrites. |
 | `--intensity 1` | Standard: also eligible nouns, verbs and other adverbs; default. |
 | `--intensity 2` | Broader: also narrower/register-sensitive entries. Review carefully. |
-| `--synonyms-only` | Do not rearrange sentences. |
-| `--arrange-only` | Do not substitute words. |
+| `--synonyms-only` | Do not rearrange sentences; eligible word/phrase edits remain enabled. |
+| `--arrange-only` | Do not substitute words or phrases. |
 | `--no-rewrite` | Disable both operations, retaining line-ending normalization. |
 | `--protect TEXT` | Protect a whole word or phrase. Repeat as needed. |
 | `--vary-quotes` | Allow substitutions inside quotations; their structure still does not move. |
@@ -115,7 +117,7 @@ Sentence moves are skipped for uncertain negation/focus scope, embedded clauses,
 
 ## Sample
 
-The 97-word passage in `examples/sample.txt`, at seed 1 and standard intensity in version 1.2.0:
+The 97-word passage in `examples/sample.txt`, at seed 1 and standard intensity in version 1.2.1:
 
 > The cautious instructor assisted the cheerful youngsters. The class commenced the project late because the weather was chilly. She quietly clarified the primary concept, and the learners were happy to help. They bought a little automobile for the school journey and swiftly located the correct route. The tranquil doctor said the weary lad was healthy. The group stayed joyful although the trip was long. The author described the ultimate outcome in a truthful report. When the assembly ended, the throng was hushed. The local learners located a helpful reply and stayed tranquil. It was a little triumph.
 
@@ -131,7 +133,9 @@ The editor generates a batch automatically and displays up to three distinct opt
 | **Light touch** (`close`) | A deterministic selective edit, targeting roughly half the eligible substitutions and retaining sentence order. |
 | **Restructured** (`recast`) | Eligible word substitutions, additional manner-adverb placement, and audited phrase alternatives. |
 
-Choose any card to update the full selected text and its change ledger. Copy, text download and change-log export always use that selection. **Download all versions** exports every complete candidate, its seed/profile, the original and the selected option. Long card previews stop at 5,000 characters with an explicit notice; the selected view and exports are complete. Text stays in memory, and editing cancels obsolete computation.
+All cards now display **complete text**, not truncated previews. Use a card's controls to copy or download that result directly, or select its native radio control to update the shared ledger and selected-result exports. The selected card has a visible border; keyboard users can focus a radio and press Space. The original is never changed by selection.
+
+Long results remain complete in a scrollable card. Above 50,000 characters, inline highlighting is omitted to avoid excessive rendering work; complete change records remain available. The on-screen ledger starts with 250 changes and can display more, while all exports contain the full ledger. Invalid/obsolete requests disable every export rather than leaving old alternatives available.
 
 Every candidate is generated from the **original**, not by repeatedly rewriting a previous paraphrase. The first candidate uses the base seed with Balanced rules. For later profiles a bounded search chooses wording that differs from the already-selected options, using word/bigram overlap. This is a diversity heuristic, **not** a meaning-preservation or quality score. Multi-result searches try at most 12 candidate rewrites and may return fewer than requested. Above 2,000 whitespace-separated spans, the search tries one candidate per profile first (at most six total with duplicate fallbacks), avoiding repeated full-document passes while keeping all three approaches. Duplicate rewrites are omitted; an unrewritable passage is shown unchanged. Intensity, disabled operations, quote protection and protected terms are never relaxed to fill a quota. The batch uses its three profiles even when a single-pass style was supplied.
 
@@ -152,7 +156,15 @@ The shared lexicon now supports positive noun-head/object contexts. For example,
 
 Recast mode can vary sentence-initial transitions such as **In addition,** / **Furthermore,** and **Therefore,** / **As a result,**; use **despite** / **in spite of**; and shorten a guarded purpose phrase **in order to** to **to**. It never blindly expands infinitival `to`. These phrase rules are disabled in intensity 0, under negation, inside protected quotations, or in term-locked sentences. Risky readings of `put ... in order to ...` are left alone. Phrase edits are separately identified in the ledger.
 
-Audited comparative targets can use **more cheerful** / **most cheerful** rather than invalid suffix forms. Newly used irregular verbs retain **kept**, **shown** and their other forms; plural **aircraft** is not written as `aircrafts`. A hash-indexed native lexicon avoids scanning every row for each lookup. These are local grammatical/context rules, not general language understanding; review every candidate.
+The shared `data/rephrases.tsv` table adds **23 guarded manner/frequency adjunct rules**, separate from the existing Recast transition rules. They match exact, unprotected phrases at a supported introductory or final position. Examples include `She worked in a careful manner.` → `She worked carefully.` and `On a daily basis, she studied.` → `Daily, she studied.` Final `carefully` can become `with care`. Manner rules are available at intensity 0; frequency/time rules require intensity 1. These adjunct rules are enabled in Balanced and Recast, but not Light touch. Phrase output is not rewritten again in the same pass.
+
+Negation, focus/degree modifiers, embedded clauses, uncertain attachment, incompatible punctuation, quotations and term locks block the corresponding phrase edits. The rules do not establish semantic equivalence in arbitrary contexts. Each phrase change has its own ledger entry, and word counts may change.
+
+Recast also recognizes supported simple noun-subject clauses: with synonyms disabled, `The teacher carefully examined the report.` becomes `The teacher examined the report carefully.` at seed 1 or `Carefully, the teacher examined the report.` at seed 2. This extension retains the existing pronoun rule and is blocked by the normal scope/protection checks, auxiliary chains, additional predicates and unsupported complements.
+
+Additional grammar guards preserve the frames in `helped the child learn`, `proposed to leave`, and `tried the soup`; distinguish product recalls and intransitive sales declines; prevent nominal `a cold` or quantity `little money` from being treated as ordinary adjective substitutions; and distinguish a logical argument from a quarrel. Noun/verb cues prevent `students question` becoming `students inquiry`. Ambiguous command verbs such as `Answer the question`, `Film the event` and `Ship the tool` are preserved rather than rewritten using noun senses. Event-object rules permit `finished the project` → `completed the project` while retaining `finished the soup`.
+
+Audited comparative targets can use **more cheerful** / **most cheerful** rather than invalid suffix forms. Newly used irregular verbs retain **kept**, **shown** and their other forms; plural **aircraft** is not written as `aircrafts`. Contextual number cues distinguish `The aircraft were ready.` → `The airplanes were prepared.` from `An aircraft was ready.` → `An airplane was prepared.`; ambiguous or conflicting number cues preserve `aircraft`. A hash-indexed native lexicon avoids scanning every row for each lookup. These are local grammatical/context rules, not general language understanding; review every candidate.
 
 ## Library API
 
@@ -174,7 +186,11 @@ for (const auto& choice : choices.variants) {
 // ChangeKind also includes Phrase; count outside 1..3 throws std::invalid_argument.
 ```
 
-The public API clamps integer intensity values to the range 0–2. The browser exports `rewriteVariants(input, options, resources, count = 3)` alongside `rewrite`. Its variants contain `{seed, style, result}`. The browser API rejects unsafe numeric seeds; pass a string or bigint for values above JavaScript's safe integer range.
+The public API clamps integer intensity values to the range 0–2. The browser exports `rewriteVariants(input, options, resources, count = 3)` alongside `rewrite`. Its variants contain `{seed, style, result}`. The browser API rejects unsafe numeric seeds; pass a decimal string or bigint for values above JavaScript's safe integer range. The existing C++ `Style`, `rewrite_variants` and CLI `--style` interfaces are retained.
+
+Load `loadResources(lexiconTsv, protectedPhrasesText, rephrasesTsv)` with all three data files for full native/browser parity. The older two-argument loader remains supported but omits adjunct rewriting. Browser option names are `style`, `seed`, `intensity`, `synonyms`, `arrange`, `protectQuotes` and `protectedTerms`.
+
+Each downloaded result includes a complete `options` object so it can be reproduced with `rewrite(original, options, resources)`. The all-variations download retains `requested`, `attempts`, `selected` and `variants`, and adds the exact per-result options. CLI JSON continues to use its existing single/batch envelopes and recorded seed/profile; preserve the original base settings when replaying a CLI result. Reproducibility is version-specific.
 
 ## Develop and test the site
 
@@ -193,11 +209,11 @@ npx playwright install chromium firefox webkit
 npm run test:web
 ```
 
-`npm test` includes deterministic cross-engine comparisons, semantic-safety regression examples, CLI rejection/error cases, Unicode arguments and filenames, protected terms, JSON escaping and long-text checks. Set `SYNOMIZER_BIN` when your executable is outside `build/synomizer`, `build/synomizer.exe` or `build/Release/synomizer.exe`. The standard Visual Studio Release path is detected automatically.
+`npm test` includes deterministic cross-engine comparisons, independently asserted grammar-safety regression examples, CLI rejection/error cases, Unicode arguments and filenames, protected terms, JSON escaping and long-text checks. Set `SYNOMIZER_BIN` when your executable is outside `build/synomizer`, `build/synomizer.exe` or `build/Release/synomizer.exe`. The standard Visual Studio Release path is detected automatically.
 
-Playwright starts and stops its own local server, tests the real `/Synomizer/` deployment subpath across Chromium, Firefox, WebKit and mobile Chromium, and records screenshots and failure traces. To test an already-deployed site instead, set `PLAYWRIGHT_BASE_URL` to its URL with a trailing slash. Do not run a separate development server on port 4178 during local Playwright tests.
+Playwright starts and stops its own local server, tests the real `/Synomizer/` deployment subpath across Chromium, Firefox, WebKit and mobile Chromium, and records screenshots and failure traces. Tests cover every card's independent exports, selected ledgers, full batch downloads, duplicate suppression, profile protections, failed resource loading, rapid edits, 64-bit seed wrapping, markup escaping, narrow layouts and complete long-text logs. To test an already-deployed site instead, set `PLAYWRIGHT_BASE_URL` to its URL with a trailing slash. Do not run a separate development server on port 4178 during local Playwright tests.
 
-GitHub Pages deployment is gated on the native matrix, sanitizer checks and browser tests. `scripts/build-site.mjs` packages the page, Web Worker and the same data files into `site/`; `version.json` and `build.json` record the release version, source commit and SHA-256 hashes of all nine deployed assets, including the license. Pages deploys the exact artifact tested by the browser suite, then checks the live commit and asset hashes. GitHub's Pages source must be configured as **GitHub Actions**, not branch publishing.
+GitHub Pages deployment is gated on the native matrix, sanitizer checks and browser tests. `scripts/build-site.mjs` packages the page, Web Worker and the same data files into `site/`; `version.json` and `build.json` record the release version, source commit and SHA-256 hashes of all ten deployed assets, including the license. Pages deploys the exact artifact tested by the browser suite, then checks the live commit and asset hashes. GitHub's Pages source must be configured as **GitHub Actions**, not branch publishing.
 
 ## Contributing and licence
 
