@@ -1,30 +1,36 @@
 # Synomizer
 
-**Thoughtful variations, not random replacements.** Synomizer is a C++23 command-line tool and library, with a static [GitHub Pages editor](https://adybag14-cyber.github.io/Synomizer/), for varying English prose using a curated lexicon, grammatical inflection and conservative sentence moves.
+**Three ways to say it, from one unchanged original.** Synomizer is an Apache-2.0 C++23 English rewriter with a local-processing [GitHub Pages editor](https://adybag14-cyber.github.io/Synomizer/). It uses curated synonyms, grammatical context checks, phrase rewrites and conservative sentence moves, not a language model or rewriting service.
 
-The same text, seed, options **and engine/word-list version** produce the same output. It is useful for passages of about 100 words, and processes longer text sentence by sentence. It does not call a language model or a rewriting service.
+**Review the meaning before using a result.** These are mechanical heuristics, not a semantic parser. No intensity guarantees perfect grammar, identical meaning or an appropriate register in every context. Technical, legal, medical and publication-ready text needs particular care. Leaving text unchanged is preferable to forcing an unsuitable variation.
 
-**Review the result.** These are mechanical rules, not a semantic parser. No intensity level guarantees perfect grammar, identical meaning or a suitable register for every context. Technical, legal, medical, quoted and publication-ready writing needs particular care. Leaving a sentence unchanged is preferable to forcing an unsuitable variation.
+## Three-result browser editor
 
-## Browser editor
+Paste or import UTF-8 text and choose **Create 3 variations**. Your original stays above the results. Up to three distinct, complete rewrites appear simultaneously: side by side on desktop and stacked on a phone. Each card has its own copy, plain-text download, JSON change log, exact seed, edit rate and change counts.
 
-[Open Synomizer](https://adybag14-cyber.github.io/Synomizer/).
+**Use this** selects a version for the shared change ledger and selected-result export controls. It never overwrites your original. **New set** advances the base seed and generates another batch from that same original, never from a previous rewrite. **Download all variations** saves the original and every result, with complete settings and change records, in one JSON file.
 
-Paste or import a UTF-8 `.txt` or `.md` file. The original stays on the left; the rewrite, highlighted substitutions and change ledger appear alongside it. **Another variation** increments the seed and always rewrites the original, not the previous result. Copy the result, download a plain-text file, or export the structured JSON change log.
+The generator considers at most twelve candidates. It preserves the chosen intensity, quotation protection and protected terms, while varying synonym choices, the fraction of eligible edits applied and which eligible sentence moves are used. Exact duplicate results are removed. The changed base result stays first, and alternatives are chosen using differences in word-pair patterns. This is a **lexical-diversity heuristic, not a semantic-quality ranking**; no unsupported quality score is assigned.
 
-The controls include independent synonym and sentence-move switches, three intensity levels, quotation protection, and a **protected-terms** field. Enter one word or phrase per line to keep names and specialist terminology unchanged. Matching is case-insensitive and whole-word, with literal spacing inside a phrase; a sentence containing a matched term is not rearranged.
+A short or heavily protected passage may allow only one or two distinct rewrites. Those are shown without duplicate padding. When no rule fits, a single unchanged result is shown rather than inventing a paraphrase. This bounded search is not an exhaustive enumeration of all possible wording, and different base seeds can still find some of the same results.
 
-Processing happens in a cancellable Web Worker. The browser accepts up to **200,000 characters**, and up to 200 protected terms of at most 200 characters each. Longer files can use the native CLI. Invalid input clears the obsolete result and disables exports instead of silently copying an older rewrite. `Ctrl/Cmd + Enter` runs a rewrite.
+### Controls and limits
 
-### Privacy
+The editor has independent synonym/phrase and sentence-move switches, three intensity levels, quotation protection and a protected-terms field. Enter one term per line to retain names and specialist wording. Matching uses ASCII case folding and whole-word boundaries, with literal spacing inside a phrase. A sentence containing a matched term is not rearranged.
 
-Text is processed locally in the browser. There are no accounts, analytics, external fonts or rewriting API calls. Text and settings are not saved by the app after a reload. The page and its word lists are initially fetched from GitHub Pages, and normal hosting access logs still apply. Importing a text file does not upload it. Downloaded files contain the result and, for JSON, the selected options and change records.
+Generation runs in a cancellable Web Worker. The browser accepts up to **200,000 characters**, and up to 200 protected terms of at most 200 characters each. Editing during generation terminates the obsolete search; invalid input disables every stale export. `Ctrl/Cmd + Enter` requests a new batch.
 
-The browser implementation is JavaScript, **not a native C++ executable or WebAssembly build**. It mirrors the C++ reference rules and reads the same versioned data files. Cross-engine tests compare both rewritten text and complete change records, including full-width 64-bit seeds.
+Text is never truncated. For results longer than 50,000 characters, inline highlighting is omitted to keep rendering responsive; the full change log is still exportable. The visible ledger is paginated in groups of 250 changes. Use the C++ CLI for longer files.
+
+### Privacy and implementation
+
+Text is processed locally. The app has no accounts, analytics, external fonts or rewriting API calls and does not save text or settings after a reload. The page and three dictionary files are initially fetched from GitHub Pages; normal hosting access logs still apply. Importing a file does not upload it. The all-variations JSON includes the original text, so share it only when you intend to share the original.
+
+The browser engine is JavaScript, **not a native C++ executable or WebAssembly build**. It mirrors the C++ reference rules and reads the same versioned dictionaries. Tests compare complete result batches, settings and change logs between both implementations.
 
 ## Build the C++23 tool
 
-Use CMake 3.20 or newer and a C++23-capable compiler/toolchain. Node is only needed for parity tests and site development, not for the native executable.
+Use CMake 3.20 or newer and a C++23-capable toolchain. Node is needed only for parity tests and site development, not the native executable.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -32,96 +38,99 @@ cmake --build build --config Release --parallel 2
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-The executable is `build/synomizer` on a single-configuration Unix build, `build/synomizer.exe` with MinGW/Ninja on Windows, or `build/Release/synomizer.exe` with Visual Studio. The CI workflow builds on Linux, Windows and macOS, and uploads native executables with the licence and documentation as workflow artifacts. Windows MSVC and MinGW packages use a static C++ runtime. Versioned installable ZIP packages are also retained as `packages-*` workflow artifacts and can be published through GitHub Releases.
-
-Optional installation:
+Executables are normally `build/synomizer` on Unix, `build/synomizer.exe` with MinGW/Ninja, or `build/Release/synomizer.exe` with Visual Studio. CI builds Linux x64, Windows x64 and macOS ARM64 executables and versioned ZIP packages with the licence and documentation. Windows packages use a static C++ runtime.
 
 ```sh
 cmake --install build --config Release --prefix ./install
 cpack --config build/CPackConfig.cmake -C Release -G ZIP -B packages
 ```
 
-The native executable embeds the lexicon and phrase list and does not need a network connection or external dictionary files at runtime. Changing either data file automatically triggers CMake to reconfigure on the next build.
+The native executable embeds the lexicon, protected-expression list and phrase-rewrite table. It needs neither a network connection nor external dictionary files at runtime. Editing any of the three data files triggers CMake reconfiguration on the next build.
 
 ## Command-line use
 
 ```sh
-# File input; rewrite on stdout
+# Three distinct alternatives with exact reproduction settings
+./build/synomizer --variants 3 --json examples/sample.txt
+
+# Existing single-result output
 ./build/synomizer --seed 1 examples/sample.txt
 
-# Protect an important term and save the result
-./build/synomizer --protect "control group" --protect "Alice" \
-  --output rewritten.txt passage.txt
+# Preserve specialist wording and save three results
+./build/synomizer --variants 3 --protect "control group" \
+  --protect "Alice" --output variations.txt passage.txt
 
-# Explain the edits on stderr
+# Explain each operation on stderr
 ./build/synomizer --show-changes --text "They purchased a car."
 
-# Machine-readable result with exact seed precision
-./build/synomizer --json --seed 18446744073709551615 passage.txt
-
-# Explicit stdin
-printf 'The happy child bought a car.\n' | ./build/synomizer -
+# Exact 64-bit seed; explicit stdin
+printf 'The happy child bought a car.\n' | \
+  ./build/synomizer --variants 3 --json --seed 18446744073709551615 -
 ```
 
-On Windows, substitute the executable path appropriate to your CMake generator.
+On Windows, substitute the executable path for your generator.
 
 | Option | Behaviour |
 | --- | --- |
+| `--variants N` | Request 1, 2 or 3 distinct results; omit for the existing single-result format. |
 | `--seed N`, `-s N` | Unsigned decimal integer from 0 to 18446744073709551615; default 1. |
-| `--intensity 0`, `-i 0` | Light: eligible adjectives and manner adverbs only. |
-| `--intensity 1` | Standard: also eligible nouns, verbs and other adverbs; default. |
-| `--intensity 2` | Broader: also narrower/register-sensitive entries. Review carefully. |
-| `--synonyms-only` | Do not rearrange sentences. |
-| `--arrange-only` | Do not substitute words. |
+| `--intensity 0`, `-i 0` | Light: eligible adjectives, manner adverbs and manner-phrase rewrites. |
+| `--intensity 1` | Standard: also eligible nouns, verbs, other adverbs and frequency phrases; default. |
+| `--intensity 2` | Broader: also narrower or register-sensitive entries; review carefully. |
+| `--density N` | Apply approximately N percent of eligible word/phrase edits, from 0 to 100; default 100. Does not make riskier synonyms eligible. |
+| `--mixed-moves` | Apply a seeded subset of eligible sentence moves. |
+| `--synonyms-only` | Keep sentence order; word and phrase rewrites remain enabled. |
+| `--arrange-only` | Do not substitute words or phrases. |
 | `--no-rewrite` | Disable both operations, retaining line-ending normalization. |
-| `--protect TEXT` | Protect a whole word or phrase. Repeat as needed. |
-| `--vary-quotes` | Allow substitutions inside quotations; their structure still does not move. |
-| `--show-changes` | Write each change to stderr. |
-| `--json` | Write version, string-valued seed, rewritten text and structured changes as JSON. |
-| `--text TEXT` | Use an inline passage instead of a file or stdin. |
+| `--protect TEXT` | Protect a whole word or phrase; repeat as needed. |
+| `--vary-quotes` | Permit word substitutions inside quotations; their structure does not move. |
+| `--show-changes` | Explain changes on stderr, grouped by variation for batches. |
+| `--json` | Export exact options, rewritten text and structured changes. |
+| `--text TEXT` | Use inline text instead of a file or stdin. |
 | `--output FILE`, `-o FILE` | Write to a file instead of stdout. |
-| `--` | End options, for example before a filename beginning with `-`. |
-| `--help`, `--version` | Show usage or version. |
+| `--` | End option parsing, allowing filenames beginning with `-`. |
+| `--help`, `--version` | Display usage or version. |
 
-No filename, or `-`, reads stdin. Files and text are UTF-8. CRLF and standalone CR line endings normalize to LF; paragraph breaks and other layout are retained. Invalid numbers, contradictory rewrite modes and conflicting input sources return a nonzero exit code. JSON seeds are strings so JavaScript consumers cannot lose precision. File read/write errors are reported on stderr.
+No filename, or `-`, reads stdin. Input and output are UTF-8. CRLF and standalone CR normalize to LF; paragraph breaks and other layout are retained. Invalid numbers, contradictory modes, conflicting input sources and I/O errors return a nonzero exit code.
 
-## What the rules do
+Without `--variants`, JSON contains `version`, string-valued `seed`, `options`, `text` and `changes`. With `--variants`, it contains `version`, `requested`, `candidatesConsidered` and a `variations` array of those individual objects. Explicit `--variants 1` still uses the batch envelope. Seeds are strings to avoid precision loss in JSON consumers.
 
-Substitutions are selected using a deterministic 64-bit hash. The engine checks local part-of-speech cues, grammatical frames, verb tense, participles, plural forms, supported comparative/superlative forms, capitalization, and adjacent `a`/`an` articles. Grammar decisions use the original sentence context, not already substituted words. A limited set of clause, manner-adverb and coordinated-adjective moves supplies structural variation.
+To reproduce a chosen result, use the **original text and all of that result's options**, including its seed, density, movement settings, intensity and protected terms. The base seed identifies a batch, not every individual result. Seed arithmetic wraps at the unsigned 64-bit limit. Reproducibility applies within a particular engine/data version; upgrading the rules can change seeded output.
 
-Additional frame checks retain `likely to leave`, `remembered to help` and the verb in `found it difficult`. Degree modifiers are not detached from their adverbs, line-wrapped clauses are not treated as independent sentences, and adjective movement updates a/an when necessary.
+## What makes the engine context-aware
 
-Some examples:
+The engine checks local part-of-speech cues, supported grammatical frames, verb tense and participles, number, comparative/superlative degree, capitalization and adjacent `a`/`an`. Word-level grammatical decisions use a snapshot of the sentence before synonym substitution, rather than already replaced neighbouring words.
 
-| Input | Behaviour |
+Conservative clause, manner-adverb and coordinated-adjective moves supply structural variation. A guarded pre-verbal adverb rule can turn `The teacher carefully examined the report.` into `The teacher examined the report carefully.` at seed 1 or `Carefully, the teacher examined the report.` at seed 2 with synonyms disabled.
+
+Phrase rewrites use `data/rephrases.tsv`. They match exact unprotected wording in supported introductory or final adjunct positions, with checks for negation, focus, embedded clauses, punctuation and predicate context. For example, `She worked in a careful manner.` becomes `She worked carefully.`, and `On a daily basis, she studied.` becomes `Daily, she studied.` A final `carefully` can also become `with care`. Each phrase edit is independently logged. Word counts may change.
+
+Supported analytic comparatives and superlatives retain degree instead of inventing invalid suffixes: `happier` can become `more cheerful`. The invariant noun `aircraft` is rewritten only when supported cues establish singular or plural number. Context checks retain unsupported senses and frames of try/attempt, propose/suggest, help/assist, product recalls, logical arguments and event-object verbs. Lexicon lookups are indexed, and protected phrases are ordered once rather than copied and sorted for each sentence.
+
+| Input | Example behaviour |
 | --- | --- |
 | `They purchased a car.` | `They bought an automobile.` at seed 1. |
-| `They have already selected a car.` | Keeps the participle: `have already chosen`, not `have already chose`. |
-| `Because the road was icy, the bus arrived late.` | The clause can move to the end. |
+| `They have already selected a car.` | Keeps the participle `have already chosen`, not `have already chose`. |
+| `She is happier today.` | `She is more cheerful today.` at seed 1. |
+| `She helped the child learn English.` | Keeps `helped`; never applies the unsupported `assisted the child learn` frame. |
+| `They finished the project.` | Can become `They completed the project.`; `finished the soup` stays unchanged. |
+| `The aircraft were ready.` | `The airplanes were prepared.` at seed 1, preserving plural agreement. |
+| `The students question the result.` | Keeps the verb `question`, rather than substituting the noun `inquiry`. |
+| `It was an honest mistake.` | Keeps the idiom, instead of `a truthful error`. |
 | `They did not leave because the road was icy.` | Does not move the ambiguous negated cause. |
-| `It was an honest mistake.` | Keeps the idiom rather than producing `a truthful error`. |
-| `The child was alone.` | Keeps `alone`, never substitutes the ungrammatical `solely`. |
 | `https://happy.com/car` or `happy@car.com` | Keeps the address intact. |
 
-### Protection and deliberate omissions
+### Protection and limitations
 
-Straight and curly quotations, including nested and multiline quotations, are protected by default. URLs, email addresses, common paths/identifiers, alphanumeric units, inline and fenced code, Markdown links and HTML tags are treated as opaque spans. Mixed/non-ASCII words are kept intact rather than partially rewritten. This is a plain-text rewriter, not an HTML or Markdown parser; render structured documents with their own format-aware tooling.
+Straight and curly quotations, including nested and multiline quotations, are protected by default. URLs, email addresses, common paths/identifiers, alphanumeric units, inline and fenced code, Markdown links and HTML tags are opaque spans. Mixed/non-ASCII words are retained rather than partially rewritten. This is a plain-text rewriter, not a full HTML/Markdown parser.
 
-The engine retains numbers, acronym-like all-caps words, title-case headings and many capitalized names. Name recognition is heuristic, especially at the start of a sentence: use protected terms when a name must not change. Possessives and contractions are conservatively retained. Curated fixed expressions, phrasal verbs and technical collocations are protected through `data/phrases.txt`.
+Numbers, acronym-like all-caps words, title-case headings and many capitalized names are retained. Name recognition remains heuristic, especially at the beginning of a sentence; use protected terms for names that must not change. Possessives and contractions are conservatively preserved. Fixed expressions and technical collocations are protected through `data/phrases.txt`.
 
-Sentence moves are skipped for uncertain negation/focus scope, embedded clauses, reference-sensitive third-person clauses, questions, complex punctuation and protected spans. Recognizing all ambiguity is beyond these rules. Synonym senses, idioms not in the phrase list, register, emphasis and domain-specific meanings can still drift. Different seeds can also produce the same result when no alternatives fit.
+Sentence moves are skipped for uncertain negation/focus scope, embedded clauses, reference-sensitive third-person clauses, questions, complex punctuation and protected terms. The rules cannot recognize every ambiguity. Unlisted idioms, synonym senses, register, emphasis and domain-specific meanings can still drift. More alternatives do not establish semantic equivalence.
 
-## Sample
+## Library APIs
 
-The 97-word passage in `examples/sample.txt`, at seed 1 and standard intensity in version 1.1.1:
-
-> The cautious instructor assisted the cheerful youngsters. The class commenced the project late because the weather was chilly. She quietly clarified the primary concept, and the learners were happy to help. They bought a little automobile for the school journey and swiftly located the correct route. The tranquil doctor said the weary lad was healthy. The group stayed joyful although the trip was long. The author described the ultimate outcome in a truthful report. When the assembly ended, the throng was hushed. The local learners located a helpful reply and stayed tranquil. It was a little triumph.
-
-Inspect the change ledger or use `--show-changes` to review individual operations. The number of words is not forced to remain fixed.
-
-## Library API
-
-Link the CMake target `synomizer-lib` and include `synomizer/engine.hpp`:
+Link `synomizer-lib` and include `synomizer/engine.hpp`:
 
 ```cpp
 #include <synomizer/engine.hpp>
@@ -130,35 +139,43 @@ synomizer::Options options;
 options.seed = 42;
 options.intensity = 1;
 options.protected_terms = {"control group", "Alice"};
-const auto result = synomizer::rewrite("The happy child bought a car.", options);
-// result.text; result.changes (kind, before, after, detail)
+const std::string original = "The careful teacher helped the happy children.";
+const auto batch = synomizer::rewrite_variations(original, options, 3);
+for (const auto& variant : batch.variations) {
+  // variant.result.text and variant.result.changes
+  const auto replay = synomizer::rewrite(original, variant.options);
+}
 ```
 
-The public API clamps integer intensity values to the range 0–2. The browser API rejects unsafe numeric seeds; pass a string or bigint for values above JavaScript's safe integer range.
+C++ integer intensity and density are clamped to 0-2 and 0-100. `Options::mixed_moves` enables a subset of eligible moves. Variation counts outside 1-3 throw `std::invalid_argument`. Change kinds are `Synonym`, `Arrangement`, `Article` and `Phrase`.
 
-## Develop and test the site
+The JavaScript module exports `loadResources(lexiconTsv, protectedPhrasesText, rephrasesTsv)`, `rewrite(input, options, resources)` and `rewriteVariations(input, options, resources, count = 3)`. Load all three data files to match the full native engine; the legacy two-argument loader omits phrase rewriting. Browser options use `protectedTerms`, `protectQuotes` and `mixedMoves`.
 
-Node 22 or newer is required. The client has no third-party runtime packages; Playwright is a development-only dependency pinned by `package-lock.json`.
+A browser batch is `{requested, candidatesConsidered, variations: [{result, options}, ...]}`, where `result` includes `text`, `changes` and renderable `parts`. The CLI and downloaded JSON flatten each result's text and changes into its item. Input options are not mutated, and each result has an independent options copy. Unsafe numeric seeds and non-integer densities are rejected; use a decimal string or bigint for seeds above JavaScript's safe integer range.
+
+## Development and testing
+
+Node 22 or newer is required for development. Playwright is pinned as a development-only dependency; the client has no third-party runtime packages.
 
 ```sh
 npm ci
-# After building the C++ tool:
+# Build the C++ reference first, then:
 npm test
-
-npm run build:site
-npm run serve
-# Open http://127.0.0.1:4178/Synomizer/
-
 npx playwright install chromium firefox webkit
 npm run test:web
+
+# Independent local preview, not during Playwright's managed server:
+npm run build:site
+npm run serve
+# http://127.0.0.1:4178/Synomizer/
 ```
 
-`npm test` includes deterministic cross-engine comparisons, semantic-safety regression examples, CLI rejection/error cases, Unicode arguments and filenames, protected terms, JSON escaping and long-text checks. Set `SYNOMIZER_BIN` when your executable is outside `build/synomizer`, `build/synomizer.exe` or `build/Release/synomizer.exe`. The standard Visual Studio Release path is detected automatically.
+`npm test` covers cross-engine text/change/option parity, deterministic batch selection and replay, unique results, bounded searches, positive and negative grammar/phrase cases, Unicode, protected spans, CLI errors, site integrity and long passages. Set `SYNOMIZER_BIN` when the executable is outside the usual build locations.
 
-Playwright starts and stops its own local server, tests the real `/Synomizer/` deployment subpath across Chromium, Firefox, WebKit and mobile Chromium, and records screenshots and failure traces. To test an already-deployed site instead, set `PLAYWRIGHT_BASE_URL` to its URL with a trailing slash. Do not run a separate development server on port 4178 during local Playwright tests.
+Playwright manages its own server under the real `/Synomizer/` subpath and runs Chromium, Firefox, WebKit and mobile Chromium. Tests cover all card exports, selected ledgers, batch downloads, duplicate suppression, protection settings, missing dictionaries, stale requests, markup injection, 64-bit seed wrapping, narrow layouts and full long-text logs. Screenshots and failure traces are retained as workflow artifacts. Set `PLAYWRIGHT_BASE_URL` to a deployed URL with a trailing slash to test production instead.
 
-GitHub Pages deployment is gated on the native matrix, sanitizer checks and browser tests. `scripts/build-site.mjs` packages the page, Web Worker and the same data files into `site/`; `version.json` and `build.json` record the release version, source commit and SHA-256 hashes of all nine deployed assets, including the license. Pages deploys the exact artifact tested by the browser suite, then checks the live commit and asset hashes. GitHub's Pages source must be configured as **GitHub Actions**, not branch publishing.
+Pages deployment is gated by native builds on three platforms, AddressSanitizer/UndefinedBehaviorSanitizer and all browser projects. `scripts/build-site.mjs` creates `site/`, `version.json` and `build.json`, including SHA-256 hashes of all ten deployed assets. Pages deploys the exact browser-tested artifact and checks its live source commit and hashes. The repository's Pages source must be **GitHub Actions**.
 
 ## Contributing and licence
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for adding a narrowly scoped rule or dictionary entry, and [CHANGELOG.md](CHANGELOG.md) for changes. The original [Apache-2.0 licence](LICENSE) is retained. Copyright 2026 adybag14-cyber.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). The original [Apache-2.0 licence](LICENSE) is retained. Copyright 2026 adybag14-cyber.

@@ -443,6 +443,58 @@ std::optional<ArrangeOutcome> try_adverb(const std::vector<Token>& tokens, const
   return finish(std::move(rebuilt), before, "Moved a final manner adverb to the front");
 }
 
+
+// Relocate an unmodified manner adverb attached to one simple lexical predicate.
+std::optional<ArrangeOutcome> try_medial_adverb(const std::vector<Token>& tokens,
+                                               const std::vector<int>& words, std::uint64_t seed) {
+  static const std::unordered_set<std::string_view> verbs = {
+    "examine", "inspect", "purchase", "buy", "select", "choose", "construct", "build", "repair", "mend", "finish", "complete"};
+  if (words.size() < 4) return std::nullopt;
+  const int punct = punct_index(tokens);
+  const int limit = punct < 0 ? static_cast<int>(tokens.size()) : punct;
+  int predicates = 0;
+  for (int i : words) {
+    const auto& t = tokens[static_cast<std::size_t>(i)];
+    if (is_aux(lower_copy(t.text))) return std::nullopt;
+    if (looks_like_verb_token(t.text)) ++predicates;
+  }
+  if (predicates != 1 || range_has_coord(tokens, 0, limit)) return std::nullopt;
+  for (std::size_t slot = 1; slot + 2 < words.size(); ++slot) {
+    const int at = words[slot], verb_at = words[slot+1];
+    if (!is_manner_adverb(tokens[static_cast<std::size_t>(at)]) || verb_at != at+2 ||
+        tokens[static_cast<std::size_t>(at+1)].text != " ") continue;
+    bool simple_verb = false;
+    for (const auto& analysis : analyze_word(tokens[static_cast<std::size_t>(verb_at)].text, "", false))
+      simple_verb = simple_verb || (analysis.pos == Pos::Verb && verbs.contains(analysis.lemma));
+    if (!simple_verb) continue;
+    bool simple = true;
+    for (std::size_t k = 0; k < words.size(); ++k) {
+      if (k == slot || k == slot+1) continue;
+      const auto w = word_at(tokens, words[k]);
+      if (is_preposition(w) || is_subordinator_word(w) || is_known_adverb_word(w) ||
+          (w.ends_with("ing") && !lexicon().has(w, Pos::Noun))) simple = false;
+    }
+    if (!simple) continue;
+    auto body = slice_tokens(tokens, 0, at);
+    append_slice(body, slice_tokens(tokens, verb_at, limit));
+    auto adverb = tokens[static_cast<std::size_t>(at)];
+    std::vector<Token> rebuilt;
+    if (seed % 2 == 0) {
+      decap_first(body);
+      adverb.text = apply_caps(lower_copy(adverb.text), "A");
+      rebuilt.push_back(std::move(adverb));
+      rebuilt.push_back(Token{",", false, false, false});
+      append_slice(rebuilt, body);
+    } else {
+      rebuilt = std::move(body);
+      append_slice(rebuilt, {adverb});
+    }
+    if (punct >= 0) rebuilt.push_back(tokens[static_cast<std::size_t>(punct)]);
+    return finish(std::move(rebuilt), concat_tokens(tokens), "Moved a pre-verbal manner adverb");
+  }
+  return std::nullopt;
+}
+
 std::optional<ArrangeOutcome> try_adjectives(const std::vector<Token>& tokens, const std::vector<int>& words) {
   if (words.size() < 3) {
     return std::nullopt;
@@ -478,7 +530,7 @@ std::optional<ArrangeOutcome> try_adjectives(const std::vector<Token>& tokens, c
 
 }  // namespace
 
-std::optional<ArrangeOutcome> arrange_sentence(const std::vector<Token>& tokens, bool enabled) {
+std::optional<ArrangeOutcome> arrange_sentence(const std::vector<Token>& tokens, bool enabled, std::uint64_t seed) {
   if (!enabled || blocked_sentence(tokens)) {
     return std::nullopt;
   }
@@ -498,6 +550,7 @@ std::optional<ArrangeOutcome> arrange_sentence(const std::vector<Token>& tokens,
   if (auto adverb = try_adverb(tokens, words)) {
     return adverb;
   }
+  if (auto medial = try_medial_adverb(tokens, words, seed)) return medial;
   return try_adjectives(tokens, words);
 }
 

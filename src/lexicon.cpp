@@ -140,55 +140,47 @@ Lexicon build_lexicon() {
 
 }  // namespace
 
+namespace {
+std::string row_key(std::string_view lemma, Pos pos) {
+  std::string key(lemma);
+  key.push_back('\0'); key.push_back(static_cast<char>(pos));
+  return key;
+}
+}
+
 bool Lexicon::has_lemma(std::string_view lemma) const {
-  return std::ranges::any_of(rows_, [&](const Row& row) { return row.analysis.lemma == lemma; });
+  return by_lemma_.contains(std::string(lemma));
 }
-
 bool Lexicon::has(std::string_view lemma, Pos pos) const {
-  return find(lemma, pos).has_value();
+  return index_.contains(row_key(lemma, pos));
 }
-
 std::optional<Analysis> Lexicon::find(std::string_view lemma, Pos pos) const {
-  for (const Row& row : rows_) {
-    if (row.analysis.lemma == lemma && row.analysis.pos == pos) {
-      return row.analysis;
-    }
-  }
-  return std::nullopt;
+  const auto it = index_.find(row_key(lemma, pos));
+  if (it == index_.end()) return std::nullopt;
+  return rows_[it->second].analysis;
 }
-
 std::vector<Analysis> Lexicon::entries_for(std::string_view lemma) const {
   std::vector<Analysis> found;
-  for (const Row& row : rows_) {
-    if (row.analysis.lemma == lemma) {
-      found.push_back(row.analysis);
-    }
-  }
+  const auto it = by_lemma_.find(std::string(lemma));
+  if (it != by_lemma_.end()) for (const auto index : it->second) found.push_back(rows_[index].analysis);
   return found;
 }
-
 const std::vector<std::string>* Lexicon::synonyms(std::string_view lemma, Pos pos) const {
-  for (const Row& row : rows_) {
-    if (row.analysis.lemma == lemma && row.analysis.pos == pos) {
-      return &row.synonyms;
-    }
-  }
-  return nullptr;
+  const auto it = index_.find(row_key(lemma, pos));
+  return it == index_.end() ? nullptr : &rows_[it->second].synonyms;
 }
-
-const std::vector<std::vector<std::string>>& Lexicon::phrases() const {
-  return phrases_;
-}
-
+const std::vector<std::vector<std::string>>& Lexicon::phrases() const { return phrases_; }
 void Lexicon::add(Analysis entry, std::vector<std::string> synonyms) {
-  if (find(entry.lemma, entry.pos)) {
-    return;
-  }
+  const auto key = row_key(entry.lemma, entry.pos);
+  if (index_.contains(key)) return;
+  const auto index = rows_.size();
+  index_[key] = index;
+  by_lemma_[entry.lemma].push_back(index);
   rows_.push_back(Row{std::move(entry), std::move(synonyms)});
 }
-
 void Lexicon::add_phrase(std::vector<std::string> phrase) {
   phrases_.push_back(std::move(phrase));
+  std::ranges::stable_sort(phrases_, [](const auto& a, const auto& b) { return a.size() > b.size(); });
 }
 
 const Lexicon& lexicon() {

@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <unordered_map>
 #include <vector>
 
 namespace synomizer {
@@ -158,6 +159,8 @@ class Lexicon {
     std::vector<std::string> synonyms;
   };
   std::vector<Row> rows_;
+  std::unordered_map<std::string, std::size_t> index_;
+  std::unordered_map<std::string, std::vector<std::size_t>> by_lemma_;
   std::vector<std::vector<std::string>> phrases_;
 };
 
@@ -189,7 +192,7 @@ struct ArrangeOutcome {
   Change change;
 };
 
-[[nodiscard]] std::optional<ArrangeOutcome> arrange_sentence(const std::vector<Token>& tokens, bool enabled);
+[[nodiscard]] std::optional<ArrangeOutcome> arrange_sentence(const std::vector<Token>& tokens, bool enabled, std::uint64_t seed = 1);
 
 [[nodiscard]] bool freeze_terms(std::vector<Token>& tokens, const std::vector<std::string>& terms);
 
@@ -203,6 +206,9 @@ struct SubstituteOutcome {
 
 [[nodiscard]] SubstituteOutcome substitute(std::vector<Token> tokens, const Options& options,
                                            std::uint64_t ordinal);
+
+[[nodiscard]] std::vector<Change> rephrase(std::vector<Token>& tokens,
+    const Options& options, std::uint64_t ordinal);
 
 void fix_articles(std::vector<Token>& tokens, std::vector<Change>& changes);
 

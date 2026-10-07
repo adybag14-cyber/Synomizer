@@ -26,6 +26,7 @@ const char* kind_name(synomizer::ChangeKind kind) {
   switch (kind) {
     case synomizer::ChangeKind::Arrangement: return "arrangement";
     case synomizer::ChangeKind::Article: return "article";
+    case synomizer::ChangeKind::Phrase: return "phrase";
     default: return "synonym";
   }
 }
@@ -49,6 +50,9 @@ Options:
       --protect TEXT    Keep a whole word or phrase; repeat for multiple terms
       --vary-quotes      Allow word changes in quotations (never move their structure)
       --show-changes     Print each change on stderr
+      --variants N       Offer 1, 2, or 3 distinct rewrites (bounded search)
+      --density N        Apply 0..100 percent of eligible word/phrase edits (default 100)
+      --mixed-moves      Use a deterministic subset of eligible sentence moves
       --json            Output text and structured change records as JSON
       --text TEXT       Rewrite TEXT instead of a file or stdin
   -o, --output FILE     Write output to FILE
@@ -83,8 +87,19 @@ std::string json_string(std::string_view value) {
   }
   return out + '"';
 }
-std::string to_json(const synomizer::Result& result, std::uint64_t seed) {
-  std::string out = "{\"version\":" + json_string(synomizer::version()) + ",\"seed\":" + json_string(std::to_string(seed)) +
+std::string options_json(const synomizer::Options& options) {
+  auto boolean = [](bool value) { return value ? "true" : "false"; };
+  std::string out = "{\"seed\":" + json_string(std::to_string(options.seed)) +
+    ",\"intensity\":" + std::to_string(options.intensity) + ",\"density\":" + std::to_string(options.density) +
+    ",\"synonyms\":" + boolean(options.synonyms) + ",\"arrange\":" + boolean(options.arrange) +
+    ",\"mixedMoves\":" + boolean(options.mixed_moves) + ",\"protectQuotes\":" + boolean(options.protect_quotes) +
+    ",\"protectedTerms\":[";
+  bool first = true;
+  for (const auto& term : options.protected_terms) { if (!first) out += ','; first = false; out += json_string(term); }
+  return out + "]}";
+}
+std::string to_json(const synomizer::Result& result, const synomizer::Options& options) {
+  std::string out = "{\"version\":" + json_string(synomizer::version()) + ",\"seed\":" + json_string(std::to_string(options.seed)) + ",\"options\":" + options_json(options) +
     ",\"text\":" + json_string(result.text) + ",\"changes\":[";
   bool first = true;
   for (const auto& change : result.changes) {
@@ -99,6 +114,8 @@ int run(const std::vector<std::string>& args) {
   synomizer::Options options;
   bool show_changes=false, json=false, have_text=false, have_file=false, positional=false;
   std::string input_path, output_path, inline_text, mode;
+  int count = 1;
+  bool multiple = false;
   for (std::size_t i=1; i<args.size(); ++i) {
     const auto& arg=args[i];
     auto value = [&]() -> std::string {
@@ -110,6 +127,17 @@ int run(const std::vector<std::string>& args) {
       if (arg=="--help" || arg=="-h") { print_help(); return 0; }
       if (arg=="--version" || arg=="-v") { std::cout << "synomizer " << synomizer::version() << '\n'; return 0; }
       if (arg=="--show-changes") { show_changes=true; continue; }
+      if (arg=="--mixed-moves") { options.mixed_moves=true; continue; }
+      if (arg=="--density") {
+        const auto n=number(value(),"density");
+        if (n>100) throw std::runtime_error("density must be between 0 and 100");
+        options.density=static_cast<int>(n); continue;
+      }
+      if (arg=="--variants") {
+        const auto n=number(value(),"variation count");
+        if (n<1 || n>3) throw std::runtime_error("variation count must be 1, 2, or 3");
+        count=static_cast<int>(n); multiple=true; continue;
+      }
       if (arg=="--json") { json=true; continue; }
       if (arg=="--vary-quotes") { options.protect_quotes=false; continue; }
       if (arg=="--seed" || arg=="-s") { options.seed=number(value(),"seed"); continue; }
@@ -160,10 +188,35 @@ int run(const std::vector<std::string>& args) {
     if (stream->bad()) throw std::runtime_error("input read failed");
     input=buffer.str();
   }
-  const auto result=synomizer::rewrite(input,options);
-  if (show_changes) for (const auto& c:result.changes)
-    std::cerr << '[' << kind_name(c.kind) << "] " << c.before << " => " << c.after << " (" << c.detail << ")\n";
-  const auto rendered=json ? to_json(result,options.seed) : result.text;
+  std::string rendered;
+  auto log_changes = [&](const synomizer::Result& result) {
+    if (show_changes) for (const auto& c : result.changes)
+      std::cerr << '[' << kind_name(c.kind) << "] " << c.before << " => " << c.after << " (" << c.detail << ")\n";
+  };
+  if (!multiple) {
+    const auto result = synomizer::rewrite(input, options);
+    log_changes(result);
+    rendered = json ? to_json(result, options) : result.text;
+  } else {
+    const auto set = synomizer::rewrite_variations(input, options, count);
+    if (json) rendered = "{\"version\":" + json_string(synomizer::version()) + ",\"requested\":" + std::to_string(count) +
+      ",\"candidatesConsidered\":" + std::to_string(set.candidates_considered) + ",\"variations\":[";
+    else rendered = "Found " + std::to_string(set.variations.size()) + " distinct result(s) in " +
+      std::to_string(set.candidates_considered) + " candidate(s). Review meaning before use.\n\n";
+    for (std::size_t i = 0; i < set.variations.size(); ++i) {
+      const auto& variant = set.variations[i];
+      if (show_changes) std::cerr << "Variation " << i+1 << ":\n";
+      log_changes(variant.result);
+      if (json) {
+        if (i) rendered += ',';
+        auto item = to_json(variant.result, variant.options); item.pop_back(); rendered += item;
+      } else {
+        rendered += "--- Variation " + std::to_string(i+1) + " (seed " + std::to_string(variant.options.seed) +
+          ", density " + std::to_string(variant.options.density) + "%) ---\n" + variant.result.text + "\n\n";
+      }
+    }
+    if (json) rendered += "]}\n";
+  }
   if (output_path.empty()) {
     std::cout << rendered;
     std::cout.flush();

@@ -257,6 +257,7 @@ std::string regular_third(std::string_view lemma) {
 }
 
 std::string regular_plural(std::string_view lemma) {
+  if (lemma == "aircraft") return "aircraft";
   static const std::unordered_set<std::string_view> f_to_ves = {
       "leaf", "loaf", "wife", "life", "knife", "wolf", "half", "calf", "shelf", "self", "thief"};
   if (f_to_ves.contains(lemma)) {
@@ -286,7 +287,10 @@ std::optional<std::string> inflect(std::string_view lemma, Pos pos, const Featur
   }
   if (pos == Pos::Adj) {
     if (features.comparative || features.superlative) {
-      return grade_adjective(lemma, features.superlative);
+      if (auto form = grade_adjective(lemma, features.superlative)) return form;
+      static const std::unordered_set<std::string_view> analytic = {"careful", "cautious", "cheerful", "joyful", "pleased", "sorrowful", "unhappy", "irate", "angry", "clever", "intelligent", "powerful", "beautiful", "lovely", "attractive", "difficult", "challenging", "important", "significant", "useful", "helpful", "polite", "courteous", "brave", "courageous", "expensive", "costly", "reliable", "dependable", "concise", "succinct", "enormous", "immense", "obvious", "evident", "apparent", "complicated", "intricate", "peaceful", "tranquil", "eager", "enthusiastic", "tired", "weary", "frightened", "scared", "generous", "charitable", "considerate", "thoughtful", "serious", "solemn", "funny", "amusing", "humorous", "boring", "tedious", "interesting", "engaging", "common", "ordinary", "rare", "uncommon", "distant", "remote", "pleasant", "awful", "terrible", "wonderful", "marvelous", "grateful", "thankful", "busy", "occupied", "prepared", "wide", "broad", "similar", "comparable", "different", "distinct", "short", "brief", "strong", "weak", "frail", "easy", "simple", "small", "big", "large", "safe", "secure"};
+      if (analytic.contains(lemma)) return std::string(features.superlative ? "most " : "more ") + std::string(lemma);
+      return std::nullopt;
     }
     if (features.plural || features.past || features.gerund || features.third) {
       return std::nullopt;

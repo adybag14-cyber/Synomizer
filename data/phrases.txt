@@ -138,3 +138,58 @@ a little
 a great deal
 good morning
 good evening
+
+complete blood count
+complete blood counts
+common cold
+common law
+civil law
+powerful evidence
+strong evidence
+weak evidence
+false positive
+false positives
+false negative
+false negatives
+random variable
+random variables
+normal distribution
+normal distributions
+confidence interval
+confidence intervals
+significant figures
+standard error
+standard errors
+standard deviation
+standard deviations
+rate of change
+rates of change
+word order
+order of magnitude
+orders of magnitude
+big bang
+small intestine
+large intestine
+little by little
+large language model
+large language models
+quiet period
+short circuit
+short circuits
+short term
+long term
+heavy metal
+heavy metals
+wide angle
+partial derivative
+partial derivatives
+final exam
+final exams
+final examination
+final examinations
+
+ill will
+in good faith
+in bad faith
+argument of a function
+command line arguments

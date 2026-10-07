@@ -15,7 +15,7 @@
     <p class="kicker">C++23 · deterministic · Apache-2.0</p>
     <h1>Synomizer</h1>
     <p class="privacy">Local processing · No accounts · No text uploads</p>
-    <p class="deck">A different way to say it. Vary a passage with curated synonyms and conservative sentence moves, then review every change.</p>
+    <p class="deck">A different way to say it. Compare three ways to say it, with context-aware wording, phrase rewrites and conservative sentence moves.</p>
   </header>
 
   <main>
@@ -31,10 +31,10 @@
       <label class="check"><input id="synonyms" type="checkbox" checked> Synonyms</label>
       <label class="check"><input id="arrange" type="checkbox" checked> Sentence moves</label>
       <label class="check"><input id="quotes" type="checkbox" checked> Keep quotations</label>
-      <button type="submit" id="rewrite">Rewrite</button>
-      <button type="button" id="variant">Another variation</button>
-      <button type="button" id="copy" disabled>Copy rewrite</button>
-      <button type="button" id="download" class="secondary" disabled>Download .txt</button>
+      <button type="submit" id="rewrite">Create 3 variations</button>
+      <button type="button" id="variant">New set</button>
+      <button type="button" id="copy" disabled>Copy selected</button>
+      <button type="button" id="download" class="secondary" disabled>Download selected .txt</button>
       <button type="button" id="import" class="secondary">Import text</button>
       <input id="file" type="file" accept=".txt,.md,text/plain,text/markdown" hidden aria-label="Import a UTF-8 text file">
       <button type="button" id="clear" class="secondary">Clear</button>
@@ -52,28 +52,65 @@
     <p class="banner" id="banner" role="alert" hidden></p>
 
     <p class="hint" id="editor-help">English text · Up to 200,000 characters · Ctrl/Cmd + Enter to rewrite · Your original is never replaced by a variation.</p>
-    <div class="sheets">
-      <section>
-        <div class="sheet-head">
-          <h2>Original</h2>
-          <p id="source-count"></p>
-        </div>
-        <textarea id="source" spellcheck="true" aria-label="Original text" aria-describedby="editor-help" placeholder="Paste your English text here..."></textarea>
-      </section>
-      <section>
-        <div class="sheet-head">
-          <h2>Rewrite</h2>
-          <p id="output-count"></p>
-        </div>
-        <div id="output" class="revise" aria-live="polite" aria-label="Rewritten text"></div>
-      </section>
-    </div>
+    <section class="original-sheet">
+      <div class="sheet-head"><h2>Original</h2><p id="source-count"></p></div>
+      <textarea id="source" spellcheck="true" aria-label="Original text" aria-describedby="editor-help" placeholder="Paste your English text here..."></textarea>
+    </section>
+    <section class="comparison" aria-labelledby="variations-heading">
+      <div class="sheet-head"><h2 id="variations-heading">One original. Three possibilities.</h2></div>
+      <p id="variation-summary" class="hint" aria-live="polite"></p>
+      <p class="hint">All variations respect your intensity and protected terms. An edit rate changes how many eligible edits are used, not their safety. Review the meaning before choosing.</p>
+      <div id="variations" class="variation-grid" data-count="1" role="radiogroup" aria-labelledby="variations-heading">
+        <article class="variant-card is-selected" data-index="0" aria-labelledby="variant-title-1">
+          <div class="variant-head"><h3 id="variant-title-1">Variation 1</h3>
+            <label class="choice"><input type="radio" name="variation-choice" data-select="0" aria-label="Select variation 1" checked disabled> Use this</label></div>
+          <p class="variant-stats" id="output-count"></p>
+          <div id="output" class="revise variant-output" aria-label="Rewritten text, variation 1" tabindex="0" aria-busy="false"></div>
+          <p class="variant-options"></p>
+          <div class="variant-actions">
+            <button type="button" data-action="copy" aria-label="Copy variation 1" disabled>Copy</button>
+            <button type="button" data-action="download" class="secondary" aria-label="Download variation 1 as text" disabled>.txt</button>
+            <button type="button" data-action="json" class="secondary" aria-label="Download variation 1 change log" disabled>.json</button>
+            <button type="button" data-action="review" class="secondary" aria-label="Review variation 1 changes" disabled>Review changes</button>
+          </div>
+        </article>
+        <article class="variant-card" data-index="1" hidden aria-labelledby="variant-title-2">
+          <div class="variant-head"><h3 id="variant-title-2">Variation 2</h3>
+            <label class="choice"><input type="radio" name="variation-choice" data-select="1" aria-label="Select variation 2" disabled> Use this</label></div>
+          <p class="variant-stats" id="output-count-2"></p>
+          <div id="output-2" class="revise variant-output" aria-label="Rewritten text, variation 2" tabindex="0" aria-busy="false"></div>
+          <p class="variant-options"></p>
+          <div class="variant-actions">
+            <button type="button" data-action="copy" aria-label="Copy variation 2" disabled>Copy</button>
+            <button type="button" data-action="download" class="secondary" aria-label="Download variation 2 as text" disabled>.txt</button>
+            <button type="button" data-action="json" class="secondary" aria-label="Download variation 2 change log" disabled>.json</button>
+            <button type="button" data-action="review" class="secondary" aria-label="Review variation 2 changes" disabled>Review changes</button>
+          </div>
+        </article>
+        <article class="variant-card" data-index="2" hidden aria-labelledby="variant-title-3">
+          <div class="variant-head"><h3 id="variant-title-3">Variation 3</h3>
+            <label class="choice"><input type="radio" name="variation-choice" data-select="2" aria-label="Select variation 3" disabled> Use this</label></div>
+          <p class="variant-stats" id="output-count-3"></p>
+          <div id="output-3" class="revise variant-output" aria-label="Rewritten text, variation 3" tabindex="0" aria-busy="false"></div>
+          <p class="variant-options"></p>
+          <div class="variant-actions">
+            <button type="button" data-action="copy" aria-label="Copy variation 3" disabled>Copy</button>
+            <button type="button" data-action="download" class="secondary" aria-label="Download variation 3 as text" disabled>.txt</button>
+            <button type="button" data-action="json" class="secondary" aria-label="Download variation 3 change log" disabled>.json</button>
+            <button type="button" data-action="review" class="secondary" aria-label="Review variation 3 changes" disabled>Review changes</button>
+          </div>
+        </article>
+      </div>
+      <div class="batch-actions"><button type="button" id="export-all" class="secondary" disabled>Download all variations (.json)</button>
+        <p class="hint">Includes the original, all results, their exact options and complete change logs.</p></div>
+    </section>
 
     <section class="ledger">
       <div class="sheet-head">
-        <h2>Change ledger</h2>
+        <h2 id="ledger-heading" tabindex="-1">Change ledger</h2>
         <p>Highlighted words were substituted. Sentence moves are listed below; moving a clause can alter its emphasis.</p>
       </div>
+      <p class="hint" id="ledger-choice"></p>
       <ol id="changes"></ol>
       <button id="more-changes" type="button" class="secondary" hidden>Show more changes</button>
       <button id="export-changes" type="button" class="secondary" disabled>Download change log (.json)</button>
@@ -82,7 +119,7 @@
 
   <footer class="colophon">
     <p>Review before using. Mechanical rewriting cannot guarantee identical meaning or perfect grammar. The C++23 command-line tool is the reference. This page runs the same rules in the browser. It is not a language model, and it does not claim a perfect paraphrase: metaphor, register, and the emphasis of a moved clause can still shift.</p>
-    <p>Version 1.1.1 · Apache-2.0 · Text and settings stay in memory and are not saved after a reload. This site uses no third-party fonts, analytics, or rewriting services.</p>
+    <p>Version 1.2.0 · Apache-2.0 · Text and settings stay in memory and are not saved after a reload. This site uses no third-party fonts, analytics, or rewriting services.</p>
     <p><a href="https://github.com/adybag14-cyber/Synomizer">adybag14-cyber/Synomizer</a></p>
   </footer>
   <noscript><p class="banner">Synomizer needs JavaScript for the live rewrite.</p></noscript>

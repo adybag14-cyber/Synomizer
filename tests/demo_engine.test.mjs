@@ -16,6 +16,7 @@ const binary = [process.env.SYNOMIZER_BIN, path.join(root, "build", "synomizer")
 const resources = loadResources(
   readFileSync(path.join(root, "data", "lexicon.tsv"), "utf8"),
   readFileSync(path.join(root, "data", "phrases.txt"), "utf8"),
+  readFileSync(path.join(root, "data", "rephrases.tsv"), "utf8"),
 );
 
 const paragraph =

@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.2.0 - 2026-10-07
+
+### Three simultaneous variations
+
+- Generate up to three distinct results from an unchanged original in both C++ and JavaScript. Search at most twelve seeded candidates without escalating intensity or relaxing protections.
+- Remove exact duplicate and unchanged padding. Keep the changed base result first and select alternatives for lexical bigram diversity, without asserting a semantic-quality score.
+- Add three responsive result cards, independent copy/text/JSON exports, selection with a matching ledger, and a complete batch export including the original and exact reproduction options.
+- Add `rewrite_variations`, `--variants`, `--density` and `--mixed-moves`. Preserve the existing single-result format when `--variants` is absent.
+- Terminate obsolete searches on edits, ignore retired worker messages and disable every stale export. Long results retain full text with bounded highlight and ledger rendering.
+
+### Stronger engine
+
+- Add 23 shared phrase rules for guarded manner/frequency adjuncts, with explicit intensity, phrase boundaries, scope checks and independent change records.
+- Add a seed-selectable pre-verbal manner-adverb move for simple clauses.
+- Retain comparative and superlative degree with curated analytic forms, and handle invariant aircraft plurals with explicit number cues.
+- Expand curated vocabulary and event-object verb substitutions. Strengthen help-complement, propose-to, try/attempt, decline, recall, predicative-adjective, logical-argument, nominal-adjective, quantity-little and noun/verb context checks.
+- Expand protected technical and fixed expressions. Index lexicon lookups and stop copying/sorting protected phrases on each sentence.
+
+### Validation
+
+- Add direct native API invariants and bounded stress tests, full batch parity and replay tests, positive/negative grammar and phrase cases, and all three-result browser workflows.
+- Retain cross-platform native, sanitizer and four-browser deployment gates. Fingerprint the phrase-rewrite table in the exact browser-tested Pages artifact.
+- Preserve the original Apache-2.0 licence and local-only browser text processing.
+
 ## 1.1.1 — 2026-10-07
 
 - Reconciled supplemental hardening with the concurrently merged 1.1.0 implementation; retained protected terms, cancellable workers, the documented newline contract, and the complete existing validation suite.

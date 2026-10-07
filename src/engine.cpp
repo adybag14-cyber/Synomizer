@@ -4,6 +4,9 @@
 #include "internal.hpp"
 
 #include <utility>
+#include <algorithm>
+#include <stdexcept>
+#include <unordered_set>
 
 namespace synomizer {
 
@@ -16,6 +19,7 @@ std::string_view version() noexcept {
 
 Result rewrite(std::string_view input, const Options& options) {
   Options settings = options;
+  settings.density = std::clamp(settings.density, 0, 100);
   if (settings.intensity < 0) {
     settings.intensity = 0;
   }
@@ -41,10 +45,12 @@ Result rewrite(std::string_view input, const Options& options) {
     std::vector<Token> tokens = std::move(piece.tokens);
     freeze_tokens(tokens, settings.protect_quotes);
     const bool locked = freeze_terms(tokens, settings.protected_terms);
-    if (std::optional<ArrangeOutcome> arranged = arrange_sentence(tokens, settings.arrange && !locked)) {
+    if (std::optional<ArrangeOutcome> arranged = arrange_sentence(tokens, settings.arrange && !locked && (!settings.mixed_moves || ((settings.seed ^ ordinal) % 3 != 0)), settings.seed)) {
       tokens = std::move(arranged->tokens);
       result.changes.push_back(std::move(arranged->change));
     }
+    auto phrases = rephrase(tokens, settings, ordinal);
+    result.changes.insert(result.changes.end(), phrases.begin(), phrases.end());
     SubstituteOutcome substituted = substitute(std::move(tokens), settings, ordinal);
     ordinal = substituted.next_ordinal;
     fix_articles(substituted.tokens, substituted.changes);
