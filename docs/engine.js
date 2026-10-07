@@ -1414,11 +1414,12 @@ export function rewrite(input, options = {}, resources) {
 function varyPhrases(resources, tokens, options, changes) {
   if (!options.synonyms || options.style !== "recast" || options.intensity < 1) return;
   if (tokens.some((t) => ["not", "never", "no"].includes(lower(t.text)) || lower(t.text).includes("n't"))) return;
+  const purposeBlocked = tokens.some(t => ["put","set","get","got","keep","kept","bring","brought","arrange","arranged"].includes(lower(t.text)));
   for (let start = 0; start < tokens.length; start++) {
     if (!tokens[start].word || tokens[start].frozen) continue;
     let replaced = false;
     for (const rule of resources.phraseRules || []) {
-      if (rule.mode === "purpose" && tokens.some((t) => ["put","set","get","got","keep","kept","bring","brought","arrange","arranged"].includes(lower(t.text)))) continue;
+      if (rule.mode === "purpose" && purposeBlocked) continue;
       for (let form = 0; form < rule.forms.length; form++) {
         if (rule.mode === "purpose" && form !== 0) continue;
         let match = "", end = start;

@@ -2,6 +2,8 @@
 
 ## 1.3.0 - 2026-10-07
 
+- Hoist the existing purpose-phrase sentence guard out of its per-token loop. This removes a quadratic scan exposed by the long academic fixture under sanitizers, without shortening the fixture or relaxing its timeout.
+
 - Score candidate diversity against the original as well as the other choices, avoiding selection of a near-copy merely because it is far from a more substantial rewrite. Search budgets and grammatical/protection restrictions are unchanged.
 
 - Add 27 directional, context-guarded academic phrase rules in the shared lexicon, with longest-first indexing and immutable-context, streaming replacement. Balanced and Restructured can use these rules at intensity 1 or 2; Light touch remains word-only.
