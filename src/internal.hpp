@@ -191,6 +191,8 @@ struct ArrangeOutcome {
 
 [[nodiscard]] std::optional<ArrangeOutcome> arrange_sentence(const std::vector<Token>& tokens, bool enabled);
 
+[[nodiscard]] bool freeze_terms(std::vector<Token>& tokens, const std::vector<std::string>& terms);
+
 void freeze_tokens(std::vector<Token>& tokens, bool protect_quotes);
 
 struct SubstituteOutcome {

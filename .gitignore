@@ -5,3 +5,9 @@ cmake-build-*/
 CMakeUserPresets.json
 *.user
 compile_commands.json
+
+node_modules/
+site/
+playwright-report/
+test-results/
+artifacts/

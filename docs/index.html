@@ -3,19 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Synomizer</title>
+  <title>Synomizer — thoughtful variations, not random replacements</title>
+  <meta name="referrer" content="no-referrer">
   <meta name="description" content="A C++23 tool that varies English wording with grammatical synonyms and safe sentence moves. The same rules run in this page.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,560;0,9..144,640;1,9..144,560&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <a class="skip" href="#source">Skip to the editor</a>
   <header class="mast">
     <p class="kicker">C++23 · deterministic · Apache-2.0</p>
     <h1>Synomizer</h1>
-    <p class="deck">Scan a passage. Where a synonym or a sentence move stays grammatical, write the same meaning with different words.</p>
+    <p class="privacy">Local processing · No accounts · No text uploads</p>
+    <p class="deck">A different way to say it. Vary a passage with curated synonyms and conservative sentence moves, then review every change.</p>
   </header>
 
   <main>
@@ -24,7 +24,7 @@
       <label>Intensity
         <select id="intensity" name="intensity">
           <option value="0">0 · adjectives and manner</option>
-          <option value="1" selected>1 · safe words</option>
+          <option value="1" selected>1 · standard</option>
           <option value="2">2 · also narrower words</option>
         </select>
       </label>
@@ -32,23 +32,37 @@
       <label class="check"><input id="arrange" type="checkbox" checked> Sentence moves</label>
       <label class="check"><input id="quotes" type="checkbox" checked> Keep quotations</label>
       <button type="submit" id="rewrite">Rewrite</button>
-      <button type="button" id="copy">Copy rewrite</button>
+      <button type="button" id="variant">Another variation</button>
+      <button type="button" id="copy" disabled>Copy rewrite</button>
+      <button type="button" id="download" class="secondary" disabled>Download .txt</button>
+      <button type="button" id="import" class="secondary">Import text</button>
+      <input id="file" type="file" accept=".txt,.md,text/plain,text/markdown" hidden aria-label="Import a UTF-8 text file">
+      <button type="button" id="clear" class="secondary">Clear</button>
+      <button type="button" id="cancel" hidden>Cancel rewrite</button>
+      <button type="button" id="retry" hidden>Retry loading</button>
       <button type="button" id="reset">Sample</button>
     </form>
+    <details class="advanced">
+      <summary>Protect names or specialist terms</summary>
+      <label for="protected">Keep these words or phrases unchanged (one per line)</label>
+      <textarea id="protected" rows="2" placeholder="e.g. statistical significance" aria-describedby="protected-help" spellcheck="false"></textarea>
+      <p id="protected-help">Case-insensitive, whole-word matching. Matching sentences are not rearranged. Up to 200 terms.</p>
+    </details>
     <p class="status" id="status" role="status">Loading the word lists…</p>
-    <p class="banner" id="banner" hidden></p>
+    <p class="banner" id="banner" role="alert" hidden></p>
 
+    <p class="hint" id="editor-help">English text · Up to 200,000 characters · Ctrl/Cmd + Enter to rewrite · Your original is never replaced by a variation.</p>
     <div class="sheets">
       <section>
         <div class="sheet-head">
-          <h2>Copy</h2>
+          <h2>Original</h2>
           <p id="source-count"></p>
         </div>
-        <textarea id="source" spellcheck="true" aria-label="Original text"></textarea>
+        <textarea id="source" spellcheck="true" aria-label="Original text" aria-describedby="editor-help" placeholder="Paste your English text here..."></textarea>
       </section>
       <section>
         <div class="sheet-head">
-          <h2>Revise</h2>
+          <h2>Rewrite</h2>
           <p id="output-count"></p>
         </div>
         <div id="output" class="revise" aria-live="polite" aria-label="Rewritten text"></div>
@@ -57,15 +71,18 @@
 
     <section class="ledger">
       <div class="sheet-head">
-        <h2>Proof</h2>
-        <p>Marked words in the revise column differ from the copy. A move can keep a word and change its place.</p>
+        <h2>Change ledger</h2>
+        <p>Highlighted words were substituted. Sentence moves are listed below; moving a clause can alter its emphasis.</p>
       </div>
       <ol id="changes"></ol>
+      <button id="more-changes" type="button" class="secondary" hidden>Show more changes</button>
+      <button id="export-changes" type="button" class="secondary" disabled>Download change log (.json)</button>
     </section>
   </main>
 
   <footer class="colophon">
-    <p>The command-line tool is the reference. This page runs the same rules in the browser. It is not a language model, and it does not claim a perfect paraphrase: metaphor, register, and the emphasis of a moved clause can still shift.</p>
+    <p>Review before using. Mechanical rewriting cannot guarantee identical meaning or perfect grammar. The C++23 command-line tool is the reference. This page runs the same rules in the browser. It is not a language model, and it does not claim a perfect paraphrase: metaphor, register, and the emphasis of a moved clause can still shift.</p>
+    <p>Version 1.1.0 · Apache-2.0 · Text and settings stay in memory and are not saved after a reload. This site uses no third-party fonts, analytics, or rewriting services.</p>
     <p><a href="https://github.com/adybag14-cyber/Synomizer">adybag14-cyber/Synomizer</a></p>
   </footer>
   <noscript><p class="banner">Synomizer needs JavaScript for the live rewrite.</p></noscript>

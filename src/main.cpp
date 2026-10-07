@@ -1,216 +1,210 @@
 // Copyright 2026 adybag14-cyber
 // SPDX-License-Identifier: Apache-2.0
-
 #include "synomizer/engine.hpp"
-
+#include <charconv>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
-
+#include <vector>
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <shellapi.h>
 #include <fcntl.h>
 #include <io.h>
 #endif
 
 namespace {
-
+const char* kind_name(synomizer::ChangeKind kind) {
+  switch (kind) {
+    case synomizer::ChangeKind::Arrangement: return "arrangement";
+    case synomizer::ChangeKind::Article: return "article";
+    default: return "synonym";
+  }
+}
 void print_help() {
-  std::cout
-      << "synomizer " << synomizer::version()
-      << "\n"
-         "Rewrite English text with grammatical synonyms and safe clause moves.\n"
-         "\n"
-         "Usage: synomizer [options] [file]\n"
-         "       synomizer [options] --text TEXT\n"
-         "\n"
-         "With no file and no --text, synomizer reads stdin.\n"
-         "The same text and --seed always produce the same wording.\n"
-         "\n"
-         "Options:\n"
-         "  -s, --seed N           Choice seed (default 1)\n"
-         "  -i, --intensity N      0 adjectives and manner adverbs, 1 safe words, 2 also narrower words\n"
-         "      --synonyms-only    Do not rearrange clauses, adverbs, or adjectives\n"
-         "      --arrange-only     Do not substitute synonyms\n"
-         "      --show-changes     Print each substitution and move on stderr\n"
-         "      --vary-quotes      Also rewrite words inside quotation marks\n"
-         "  -o, --output FILE      Write the rewrite to FILE instead of stdout\n"
-         "      --text TEXT        Rewrite TEXT instead of a file or stdin\n"
-         "  -v, --version          Print the version\n"
-         "  -h, --help             Print this help\n";
-}
+  std::cout << "synomizer " << synomizer::version() << R"HELP(
+Deterministic English rewriting with curated synonyms and conservative sentence moves.
+Review the result: mechanical rules cannot guarantee semantic equivalence.
 
-void print_changes(const synomizer::Result& result) {
-  for (const synomizer::Change& change : result.changes) {
-    const char* kind = "synonym";
-    if (change.kind == synomizer::ChangeKind::Arrangement) {
-      kind = "arrangement";
-    } else if (change.kind == synomizer::ChangeKind::Article) {
-      kind = "article";
+Usage: synomizer [options] [file|-]
+       synomizer [options] --text TEXT
+
+No file, or a single dash, reads stdin. Input and output are UTF-8.
+CRLF and standalone CR line endings are normalized to LF.
+
+Options:
+  -s, --seed N           Unsigned 64-bit decimal seed (default 1)
+  -i, --intensity N      0 light, 1 standard (default), 2 broader; review all modes
+      --synonyms-only    Do not rearrange sentences
+      --arrange-only     Do not substitute synonyms
+      --no-rewrite       Turn off both operations (normalize line endings only)
+      --protect TEXT    Keep a whole word or phrase; repeat for multiple terms
+      --vary-quotes      Allow word changes in quotations (never move their structure)
+      --show-changes     Print each change on stderr
+      --json            Output text and structured change records as JSON
+      --text TEXT       Rewrite TEXT instead of a file or stdin
+  -o, --output FILE     Write output to FILE
+      --                End options; allow a filename beginning with '-'
+  -v, --version         Print version
+  -h, --help            Print this help
+)HELP";
+}
+std::uint64_t number(std::string_view value, std::string_view name) {
+  std::uint64_t out = 0;
+  const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), out);
+  if (value.empty() || error != std::errc{} || end != value.data() + value.size())
+    throw std::runtime_error(std::string(name) + " must be an unsigned 64-bit decimal integer");
+  return out;
+}
+std::string json_string(std::string_view value) {
+  constexpr char hex[] = "0123456789abcdef";
+  std::string out = "\"";
+  for (unsigned char c : value) {
+    switch (c) {
+      case '\"': out += "\\\""; break;
+      case '\\': out += "\\\\"; break;
+      case '\b': out += "\\b"; break;
+      case '\f': out += "\\f"; break;
+      case '\n': out += "\\n"; break;
+      case '\r': out += "\\r"; break;
+      case '\t': out += "\\t"; break;
+      default:
+        if (c < 32) { out += "\\u00"; out += hex[c >> 4]; out += hex[c & 15]; }
+        else out += static_cast<char>(c);
     }
-    std::cerr << "[" << kind << "] " << change.before << " => " << change.after;
-    if (!change.detail.empty()) {
-      std::cerr << " (" << change.detail << ")";
-    }
-    std::cerr << "\n";
   }
+  return out + '"';
 }
-
-}  // namespace
-
-int main(int argc, char** argv) {
-#ifdef _WIN32
-  // Text mode would turn the engine's LF bytes into CRLF on the way out.
-  _setmode(_fileno(stdin), _O_BINARY);
-  _setmode(_fileno(stdout), _O_BINARY);
-  _setmode(_fileno(stderr), _O_BINARY);
-#endif
+std::string to_json(const synomizer::Result& result, std::uint64_t seed) {
+  std::string out = "{\"version\":" + json_string(synomizer::version()) + ",\"seed\":" + json_string(std::to_string(seed)) +
+    ",\"text\":" + json_string(result.text) + ",\"changes\":[";
+  bool first = true;
+  for (const auto& change : result.changes) {
+    if (!first) out += ',';
+    first = false;
+    out += "{\"kind\":" + json_string(kind_name(change.kind)) + ",\"before\":" + json_string(change.before) +
+      ",\"after\":" + json_string(change.after) + ",\"detail\":" + json_string(change.detail) + '}';
+  }
+  return out + "]}\n";
+}
+int run(const std::vector<std::string>& args) {
   synomizer::Options options;
-  bool show_changes = false;
-  bool synonyms_only = false;
-  bool arrange_only = false;
-  std::string output_path;
-  std::string input_path;
-  std::string inline_text;
-  bool have_text = false;
-
-  for (int i = 1; i < argc; ++i) {
-    const std::string arg = argv[i];
-    auto need_value = [&](const char* name) -> const char* {
-      if (i + 1 >= argc) {
-        std::cerr << "synomizer: missing value for " << name << "\n";
-        return nullptr;
-      }
-      return argv[++i];
+  bool show_changes=false, json=false, have_text=false, have_file=false, positional=false;
+  std::string input_path, output_path, inline_text, mode;
+  for (std::size_t i=1; i<args.size(); ++i) {
+    const auto& arg=args[i];
+    auto value = [&]() -> std::string {
+      if (i+1 >= args.size()) throw std::runtime_error("missing value for " + arg);
+      return args[++i];
     };
-    if (arg == "-h" || arg == "--help") {
-      print_help();
-      return 0;
-    }
-    if (arg == "-v" || arg == "--version") {
-      std::cout << "synomizer " << synomizer::version() << "\n";
-      return 0;
-    }
-    if (arg == "--show-changes") {
-      show_changes = true;
-      continue;
-    }
-    if (arg == "--synonyms-only") {
-      synonyms_only = true;
-      continue;
-    }
-    if (arg == "--arrange-only") {
-      arrange_only = true;
-      continue;
-    }
-    if (arg == "--vary-quotes") {
-      options.protect_quotes = false;
-      continue;
-    }
-    if (arg == "-s" || arg == "--seed") {
-      const char* value = need_value("--seed");
-      if (value == nullptr) {
-        return 1;
+    if (!positional) {
+      if (arg=="--") { positional=true; continue; }
+      if (arg=="--help" || arg=="-h") { print_help(); return 0; }
+      if (arg=="--version" || arg=="-v") { std::cout << "synomizer " << synomizer::version() << '\n'; return 0; }
+      if (arg=="--show-changes") { show_changes=true; continue; }
+      if (arg=="--json") { json=true; continue; }
+      if (arg=="--vary-quotes") { options.protect_quotes=false; continue; }
+      if (arg=="--seed" || arg=="-s") { options.seed=number(value(),"seed"); continue; }
+      if (arg=="--intensity" || arg=="-i") {
+        const auto n=number(value(),"intensity");
+        if (n>2) throw std::runtime_error("intensity must be 0, 1, or 2");
+        options.intensity=static_cast<int>(n); continue;
       }
-      try {
-        options.seed = static_cast<std::uint64_t>(std::stoull(value));
-      } catch (const std::exception&) {
-        std::cerr << "synomizer: seed must be an integer\n";
-        return 1;
+      if (arg=="--protect") {
+        const auto term=value();
+        if (term.find_first_not_of(" \t\n\r")==std::string::npos) throw std::runtime_error("protected term cannot be empty");
+        options.protected_terms.push_back(term); continue;
       }
-      continue;
-    }
-    if (arg == "-i" || arg == "--intensity") {
-      const char* value = need_value("--intensity");
-      if (value == nullptr) {
-        return 1;
+      if (arg=="--output" || arg=="-o") {
+        output_path=value();
+        if (output_path.empty()) throw std::runtime_error("output filename cannot be empty");
+        continue;
       }
-      try {
-        options.intensity = std::stoi(value);
-      } catch (const std::exception&) {
-        std::cerr << "synomizer: intensity must be 0, 1, or 2\n";
-        return 1;
+      if (arg=="--text") {
+        if (have_text) throw std::runtime_error("--text may be specified only once");
+        inline_text=value(); have_text=true; continue;
       }
-      if (options.intensity < 0 || options.intensity > 2) {
-        std::cerr << "synomizer: intensity must be 0, 1, or 2\n";
-        return 1;
+      if (arg=="--synonyms-only" || arg=="--arrange-only" || arg=="--no-rewrite") {
+        if (!mode.empty() && mode!=arg) throw std::runtime_error("choose only one rewrite mode");
+        mode=arg; continue;
       }
-      continue;
+      if (arg!="-" && arg.starts_with('-')) throw std::runtime_error("unknown option " + arg);
     }
-    if (arg == "-o" || arg == "--output") {
-      const char* value = need_value("--output");
-      if (value == nullptr) {
-        return 1;
-      }
-      output_path = value;
-      continue;
-    }
-    if (arg == "--text") {
-      const char* value = need_value("--text");
-      if (value == nullptr) {
-        return 1;
-      }
-      inline_text = value;
-      have_text = true;
-      continue;
-    }
-    if (arg.starts_with('-')) {
-      std::cerr << "synomizer: unknown option " << arg << "\n";
-      return 1;
-    }
-    if (!input_path.empty()) {
-      std::cerr << "synomizer: only one input file is allowed\n";
-      return 1;
-    }
-    input_path = arg;
+    if (have_file) throw std::runtime_error("only one input file is allowed");
+    input_path=arg; have_file=true;
   }
-
-  if (have_text && !input_path.empty()) {
-    std::cerr << "synomizer: use either --text or a file, not both\n";
-    return 1;
-  }
-  if (synonyms_only && arrange_only) {
-    options.synonyms = true;
-    options.arrange = true;
-  } else if (synonyms_only) {
-    options.arrange = false;
-  } else if (arrange_only) {
-    options.synonyms = false;
-  }
-
+  if (have_text && have_file) throw std::runtime_error("use either --text or a file, not both");
+  if (mode=="--no-rewrite") { options.synonyms=false; options.arrange=false; }
+  else if (mode=="--synonyms-only") options.arrange=false;
+  else if (mode=="--arrange-only") options.synonyms=false;
   std::string input;
-  if (have_text) {
-    input = std::move(inline_text);
-  } else if (!input_path.empty()) {
-    std::ifstream in(input_path, std::ios::binary);
-    if (!in) {
-      std::cerr << "synomizer: could not read " << input_path << "\n";
-      return 1;
+  if (have_text) input=inline_text;
+  else {
+    std::ifstream file;
+    std::istream* stream=&std::cin;
+    if (have_file && input_path!="-") {
+      file.open(std::filesystem::path(std::u8string(input_path.begin(), input_path.end())),std::ios::binary);
+      if (!file) throw std::runtime_error("could not read " + input_path);
+      stream=&file;
     }
     std::ostringstream buffer;
-    buffer << in.rdbuf();
-    input = buffer.str();
-  } else {
-    std::ostringstream buffer;
-    buffer << std::cin.rdbuf();
-    input = buffer.str();
+    buffer << stream->rdbuf();
+    if (stream->bad()) throw std::runtime_error("input read failed");
+    input=buffer.str();
   }
-
-  const synomizer::Result result = synomizer::rewrite(input, options);
-  if (show_changes) {
-    print_changes(result);
-  }
+  const auto result=synomizer::rewrite(input,options);
+  if (show_changes) for (const auto& c:result.changes)
+    std::cerr << '[' << kind_name(c.kind) << "] " << c.before << " => " << c.after << " (" << c.detail << ")\n";
+  const auto rendered=json ? to_json(result,options.seed) : result.text;
   if (output_path.empty()) {
-    std::cout << result.text;
-    return 0;
+    std::cout << rendered;
+    std::cout.flush();
+    if (!std::cout) throw std::runtime_error("output write failed");
+  } else {
+    std::ofstream file(std::filesystem::path(std::u8string(output_path.begin(), output_path.end())),std::ios::binary);
+    if (!file) throw std::runtime_error("could not write " + output_path);
+    file << rendered;
+    file.close();
+    if (!file) throw std::runtime_error("output write failed for " + output_path);
   }
-  std::ofstream out(output_path, std::ios::binary);
-  if (!out) {
-    std::cerr << "synomizer: could not write " << output_path << "\n";
+  return 0;
+}
+} // namespace
+
+int main(int argc,char** argv) {
+  try {
+    std::vector<std::string> args;
+#ifdef _WIN32
+    _setmode(_fileno(stdin),_O_BINARY);
+    _setmode(_fileno(stdout),_O_BINARY);
+    _setmode(_fileno(stderr),_O_BINARY);
+    // The narrow CRT argv uses the system code page; obtain UTF-8 explicitly.
+    (void)argc; (void)argv;
+    int count=0;
+    auto wide=CommandLineToArgvW(GetCommandLineW(),&count);
+    if (!wide) throw std::runtime_error("could not decode command line");
+    for (int i=0; i<count; ++i) {
+      const int bytes=WideCharToMultiByte(CP_UTF8,0,wide[i],-1,nullptr,0,nullptr,nullptr);
+      std::string arg(static_cast<std::size_t>(bytes),'\0');
+      WideCharToMultiByte(CP_UTF8,0,wide[i],-1,arg.data(),bytes,nullptr,nullptr);
+      if (!arg.empty()) arg.pop_back();
+      args.push_back(std::move(arg));
+    }
+    LocalFree(wide);
+#else
+    for (int i=0; i<argc; ++i) args.emplace_back(argv[i]);
+#endif
+    return run(args);
+  } catch (const std::exception& e) {
+    std::cerr << "synomizer: " << e.what() << '\n';
     return 1;
   }
-  out << result.text;
-  return out ? 0 : 1;
 }

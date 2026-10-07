@@ -128,7 +128,7 @@ int main() {
                !contains(text, "remained") && !contains(text, "calm"),
            "predicative calm still changes", text);
   }
-  expect_eq(run("It was an honest mistake.").text, "It was a truthful error.", "honest fixes the article");
+  expect_eq(run("It was an honest mistake.").text, "It was an honest mistake.", "honest mistake retains its idiomatic meaning");
   expect_eq(run("The money was hidden.").text, "The cash was concealed.", "mass noun and participle");
   expect_eq(run("The children were ready.").text, "The youngsters were prepared.", "irregular plural");
   expect_eq(run("It was a short visit.").text, "It was a brief visit.", "short of time");
