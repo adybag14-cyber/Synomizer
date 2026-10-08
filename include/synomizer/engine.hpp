@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -23,6 +24,31 @@ struct Change {
   std::string detail;
 };
 
+// User-authorized vocabulary metadata, not an embedded copy of the ASD dictionary.
+struct VocabularyEntry {
+  std::string term;
+  std::string pos;
+  std::string meaning;
+  std::string category = "general"; // general, technical-noun, technical-verb, name, title
+};
+struct StandardFinding {
+  std::string code, severity, message, evidence;
+  std::size_t sentence = 0; // 1-based; zero means document-wide.
+};
+struct StandardMetrics {
+  std::size_t sentences = 0, words = 0, longest_sentence = 0, long_sentences = 0;
+  std::size_t possible_passives = 0, unlisted_words = 0;
+};
+struct StandardsReport {
+  std::string profile, text_type, status = "review-required", audience, purpose;
+  std::size_t sentence_target = 25, vocabulary_entries = 0;
+  // Screening counts and local grammar cues are NOT a complete conformance assessment.
+  bool estimated_counts = true, semantic_equivalence_verified = false;
+  StandardMetrics before, after;
+  std::vector<StandardFinding> findings;
+};
+[[nodiscard]] std::vector<VocabularyEntry> parse_vocabulary(std::string_view tsv);
+
 struct Options {
   // Same text and seed always produce the same wording.
   std::uint64_t seed = 1;
@@ -36,11 +62,18 @@ struct Options {
   // Appended for aggregate-initialization source compatibility.
   // Close selectively edits words without rearranging; Recast also varies phrases.
   Style style = Style::Balanced;
+  // Standards mode is separate from variation; it returns one deterministic draft.
+  std::string profile = "variation"; // variation, ste, plain, combined
+  std::string text_type = "description"; // description, procedure
+  bool check_only = false;
+  std::string audience = {}, purpose = {};
+  std::vector<VocabularyEntry> vocabulary = {};
 };
 
 struct Result {
   std::string text;
   std::vector<Change> changes;
+  std::optional<StandardsReport> standards;
 };
 
 [[nodiscard]] Result rewrite(std::string_view input, const Options& options = {});

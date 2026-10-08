@@ -1,3 +1,5 @@
+import { rewriteStandard, parseVocabulary } from "./standards.js";
+export { parseVocabulary };
 // Copyright 2026 adybag14-cyber
 // SPDX-License-Identifier: Apache-2.0
 // Browser port of the C++23 rewriter. The command-line tool is the reference.
@@ -157,6 +159,7 @@ function keyOf(lemma, pos) {
 export function loadResources(lexiconTsv, phrasesText, rephrasesTsv = "") {
   const rows = new Map();
   const phraseRules = [];
+  const clarityRules = [];
   const academicRules = [];
   const byLemma = new Map();
   const add = (lemma, pos, synonyms, flag) => {
@@ -180,6 +183,7 @@ export function loadResources(lexiconTsv, phrasesText, rephrasesTsv = "") {
           forms.some((form) => !/^[a-z]+(?: [a-z]+)*$/.test(form))) throw new TypeError("Invalid academic phrase rule.");
       academicRules.push({ mode: cols[1], forms, minimumIntensity: Number(cols[3]) }); continue;
     }
+    if (cols[0] === "@clarity") { clarityRules.push({ source: cols[1].split(" "), target: cols[2], guard: flag }); continue; }
     if (cols[0] === "@phrase") { phraseRules.push({ mode: cols[1], forms: cols[2].split("|") }); continue; }
     if (cols[0] === "@group") {
       const members = cols[2].split("|").map((part) => part.trim()).filter(Boolean);
@@ -219,7 +223,7 @@ export function loadResources(lexiconTsv, phrasesText, rephrasesTsv = "") {
     academicIndex.get(rule.source[0]).push(rule);
   }
   for (const rules of academicIndex.values()) rules.sort((a, b) => b.source.length - a.source.length);
-  return { rows, byLemma, phrases, phraseRules, phraseIndex, fixedPhraseIndex, rephrases, academicRules, academicIndex };
+  return { rows, byLemma, phrases, phraseRules, clarityRules, phraseIndex, fixedPhraseIndex, rephrases, academicRules, academicIndex };
 }
 
 function findRow(resources, lemma, pos) {
@@ -1143,13 +1147,22 @@ function freezeQuotes(tokens) {
   }
 }
 
-function freezePhrases(resources, tokens, variation = false) {
+function freezePhrases(resources, tokens, variation = false, clarity = false) {
   const index = variation ? resources.fixedPhraseIndex : resources.phraseIndex;
   const words = wordPositions(tokens);
   const used = new Array(words.length).fill(false);
   for (let slot = 0; slot < words.length; slot++) {
     if (used[slot]) continue;
     for (const phrase of index.get(atSlot(tokens, words, slot)) || []) {
+      const claritySpan = clarity && (resources.clarityRules || []).some(rule => {
+        if (rule.source.length < phrase.length || !phrase.every((w, i) => w === rule.source[i])) return false;
+        const at = words[slot], n = rule.source.length * 2 - 1;
+        if (n > tokens.length - at) return false;
+        for (let k = 0; k < n; k++) if (tokens[at+k].frozen || (k % 2 ? tokens[at+k].text !== " " : lower(tokens[at+k].text) !== rule.source[k/2])) return false;
+        return true;
+      });
+      if (claritySpan) continue;
+
       if (slot + phrase.length > words.length) continue;
       if (!phrase.every((part, index) => atSlot(tokens, words, slot + index) === part)) continue;
       const first = words[slot];
@@ -1362,6 +1375,10 @@ export function rewrite(input, options = {}, resources) {
   if (options.intensity !== undefined && !Number.isInteger(options.intensity)) throw new RangeError("Intensity must be an integer.");
   if (options.protectedTerms !== undefined && (!Array.isArray(options.protectedTerms) || options.protectedTerms.some((term) => typeof term !== "string"))) throw new TypeError("Protected terms must be a list of strings.");
   if (options.style !== undefined && !["balanced", "close", "recast"].includes(options.style)) throw new RangeError("Style must be balanced, close, or recast.");
+  if ((options.profile ?? "variation") !== "variation") return rewriteStandard(input, options, resources,
+    { splitPieces, freezeQuotes, freezePhrases, freezeNames, freezeTerms, lower, lowerChar, upperChar, applyCaps,
+      DETERMINERS, PRONOUNS, AUX, PREPS, coordinator, subordinatorWord, knownAdverb });
+  if (options.checkOnly) throw new RangeError("check-only requires a standards profile");
   const settings = {
     style: options.style ?? "balanced",
     seed: options.seed ?? 1,
@@ -1464,7 +1481,7 @@ function wordingDistance(a, b) {
 // A bounded diversity search, not a semantic-quality scoring model.
 export function rewriteVariants(input, options = {}, resources, count = 3) {
   if (!Number.isInteger(count) || count < 1 || count > 3) throw new RangeError("Variant count must be 1, 2, or 3.");
-  if (count === 1 || (options.synonyms === false && options.arrange === false) || input === "") {
+  if ((options.profile ?? "variation") !== "variation" || count === 1 || (options.synonyms === false && options.arrange === false) || input === "") {
     const style = count === 1 ? (options.style ?? "balanced") : "balanced";
     const result = rewrite(input, { ...options, style }, resources);
     return { requested: count, attempts: 1, variants: [{ seed: String(BigInt(options.seed ?? 1)), style, result }] };

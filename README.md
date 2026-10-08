@@ -24,6 +24,37 @@ Text is processed locally in the browser. There are no accounts, analytics, exte
 
 The browser implementation is JavaScript, **not a native C++ executable or WebAssembly build**. It mirrors the C++ reference rules and reads the same versioned data files. Cross-engine tests compare both rewritten text and complete change records, including full-width 64-bit seeds.
 
+## Standards-oriented authoring (1.4.0)
+
+Choose **ASD-STE100 authoring aid**, **ISO 24495-1 plain-language aid**, or **STE + plain-language aid** in the Writing mode control. These are separate from synonym variation: they return **one deterministic clarity draft** and a review report. **Check only** preserves the text (apart from the documented line-ending normalization) and reports findings without rewriting.
+
+This is a **partial authoring aid, not a complete standards converter or conformance checker**. It does not claim full ASD-STE100 or ISO 24495-1 conformity, semantic equivalence, dictionary approval, or reader validation. No transformer, model weights, WebGPU inference or external rewriting API is required.
+
+The new profiles apply a small independent set of directional phrase simplifications, expand unambiguous contractions, rewrite supported simple-past passives only when an explicit actor is present, and separate supported independent clauses. They do not use the academic expansion or synonym-diversity engine. Conditions, negation, obligations, protected terms and uncertain constructions constrain edits. Unsupported sentences can remain unchanged even when they still need editing.
+
+The STE length screen uses 20 words for procedures and 25 for descriptions/notes, but **counts are estimates, not the complete section 8 method**. ISO 24495-1 does not impose this application's 25-word heuristic. Reports also flag possible passives, selected tense/-ing patterns and unresolved contractions; these are review cues, not categorical violations. All reports remain `review-required` and `semanticEquivalenceVerified: false`.
+
+Audience and purpose are recorded for the plain-language process. Review prompts cover relevance, findability, understanding and usability. The software does not test the text with readers or verify the document's organization, layout or sufficiency.
+
+An optional authorized vocabulary can be pasted or imported locally as UTF-8 TSV with four columns: `term`, `part of speech`, `intended meaning`, `category` (no header; `#` starts a comment). Categories are `general`, `technical-noun`, `technical-verb`, `name`, and `title`. A technical category must agree with its noun/verb part of speech. Non-general entries are protected. General entries support **spelling screening only**: their completeness, authority, meanings and grammatical use are not established. Limits: 5,000 entries, 1,000,000 total UTF-8 bytes, 200 bytes per term, 500 per meaning. The official STE dictionary and ISO document are not bundled or relicensed under Apache-2.0.
+
+Browser JSON exports include the report and complete reproduction settings, including supplied vocabulary, audience and purpose. CLI JSON includes the report; retain the invocation and vocabulary file to reproduce it. Treat exports as potentially sensitive. Text-only exports contain the draft, not a conformity claim.
+
+```sh
+./build/synomizer --profile ste --text-type procedure --json instructions.txt
+./build/synomizer --profile plain --audience "New technicians" --purpose "Inspect a valve" input.txt
+./build/synomizer --profile combined --check-only input.txt
+./build/synomizer --profile ste --vocabulary authorized-terms.tsv --json input.txt
+```
+
+`--check-only` implies JSON output and requires a standards profile. Even with `--variants 3`, standards profiles return one result rather than inventing inconsistent terminology. Existing operation switches and protected terms still apply. Plain-text CLI output warns that the draft is unverified; use `--json` for the report.
+
+See the [coverage and source notes](docs/standards.html) for requirements that remain manual and links to ASD-STE100 Issue 9, ISO 24495-1:2023 and the standards organizations.
+
+### Optional Bonsai 2 / WebGPU investigation
+
+Bonsai 2 remains a transformer model, not a transformer-free alternative. The publisher's PTQ1_0 language weights are approximately 5.95 GB; a 6 GB device is not thereby guaranteed sufficient runtime memory. A community WebGPU demonstration exists. This release **does not embed or download Bonsai**, nor send text to that demo. The coverage page links to the publisher and external demo. A future integration would need explicit download consent, compatible pinned runtime/weights, memory/context limits, cancellation, device-loss handling, cache deletion and independent output review.
+
 ## Build the C++23 tool
 
 Use CMake 3.20 or newer and a C++23-capable compiler/toolchain. Node is only needed for parity tests and site development, not for the native executable.

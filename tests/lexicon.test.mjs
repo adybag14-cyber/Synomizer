@@ -16,6 +16,11 @@ test('shared lexical rules have valid, unambiguous schemas',()=>{
       for(const word of words)assert.match(word,/^[a-z]+(?: [a-z]+)*$/);
       const key=`academic/${words[0]}`;assert.ok(!seen.has(key));seen.add(key);continue;
     }
+    if(name==='@clarity'){
+      assert.match(pos,/^[a-z']+(?: [a-z']+)*$/); assert.match(members,/^[a-z]+(?: [a-z]+)*$/);
+      assert.ok(['purpose','clause','noun','any','verb','contraction'].includes(flag));
+      continue;
+    }
     if(name==='@phrase'){
       assert.ok(['front','connector','purpose'].includes(pos));assert.ok(words.length>=2);
       for(const word of words)assert.match(word,/^[a-z]+(?: [a-z]+)*$/);

@@ -42,7 +42,7 @@ Variants rewrite_variants(std::string_view input, const Options& options, std::s
   if (count < 1 || count > 3) throw std::invalid_argument("variant count must be 1, 2, or 3");
   Variants batch;
   batch.requested = count;
-  if (count == 1 || (!options.synonyms && !options.arrange) || input.empty()) {
+  if (options.profile != "variation" || count == 1 || (!options.synonyms && !options.arrange) || input.empty()) {
     batch.attempts = 1;
     const auto style = count == 1 ? options.style : Style::Balanced;
     auto settings = options; settings.style = style;
