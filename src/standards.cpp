@@ -167,17 +167,35 @@ std::optional<ArrangeOutcome> active_past(const Tokens& t) {
   return std::nullopt;
 }
 bool independent_clause(const Tokens& t,std::size_t a,std::size_t b) {
-  auto sub=Tokens(t.begin()+static_cast<std::ptrdiff_t>(a),t.begin()+static_cast<std::ptrdiff_t>(b));
-  auto p=positions(sub); if(p.size()<3) return false;
-  const auto first=lower_copy(sub[p[0]].text);
-  std::size_t predicate;
-  if(in(first,{"we","you","they","he","she","it"})) predicate=1;
-  else if(in(first,{"the","this","these","those","a","an"})) predicate=2;
-  else return false;
-  // Require the finite predicate directly after the supported short subject,
-  // not inside an unmarked reported clause ("the operator believes ... is").
-  if(predicate>=p.size()) return false;
-  return in(lower_copy(sub[p[predicate]].text),{"is","are","was","were","am","has","have","had","can","could","may","might","must","shall","should","will","would","does","do","did"});
+  const auto sub=Tokens(t.begin()+static_cast<std::ptrdiff_t>(a),t.begin()+static_cast<std::ptrdiff_t>(b));
+  const auto p=positions(sub); if(p.size()<3) return false;
+  const auto word=[&](std::size_t i){return i<p.size()?lower_copy(sub[p[i]].text):std::string{};};
+  const auto first=word(0);
+  const std::size_t predicate=in(first,{"we","you","they","he","she","it"})?1:
+    in(first,{"the","this","these","those","a","an"})?2:p.size();
+  if(predicate+1>=p.size()) return false;
+  const auto finite=word(predicate); auto end=predicate+1;
+  const auto state=[](std::string_view w){return in(w,{"open","closed","on","off","active","inactive","clean","dry","wet","ready","empty","full","available","unavailable","present","absent","damaged","broken","intact","stable","unstable","hot","cold","complete","incomplete"});};
+  const auto base=[](const std::string& w){return std::ranges::any_of(past_verbs(),[&](const auto& form){return form.second==w;});};
+  // A finite auxiliary alone is not enough: "has said ..." and "is sure ..."
+  // can scope over both following clauses. Accept only reviewed direct states
+  // or action predicates; leave attribution and unsupported frames intact.
+  if(in(finite,{"is","are","was","were","am"})) {
+    if(word(end)=="being") {++end;if(!past_verbs().contains(word(end))) return false;}
+    else if(!state(word(end)) && !past_verbs().contains(word(end))) return false;
+  } else if(in(finite,{"has","have","had"})) {
+    if(word(end)=="been") ++end;
+    if(word(end)=="being") ++end;
+    if(!past_verbs().contains(word(end))) return false;
+  } else if(in(finite,{"can","could","may","might","must","shall","should","will","would","does","do","did"})) {
+    if(word(end)=="be") {++end;if(!state(word(end)) && !past_verbs().contains(word(end))) return false;}
+    else if(!base(word(end))) return false;
+  } else return false;
+  for(++end;end<p.size();++end) {
+    const auto w=word(end);
+    if(is_aux(w) || is_coordinator(w) || is_subordinator_word(w) || looks_like_verb_token(w)) return false;
+  }
+  return true;
 }
 
 std::optional<ArrangeOutcome> split_independent(const Tokens& t) {
@@ -256,9 +274,13 @@ StandardMetrics audit(std::string_view text,const Options& o,const Vocabulary& v
     }
     if(possible_passive(tokens)) {
       ++metrics.possible_passives;
-      add(ste(o)?"STE-3.6":"PL-ACTIVE","review",o.text_type=="procedure"?"Possible passive construction. Confirm the action and responsible actor; do not invent an agent.":"Possible passive construction. For STE descriptions, an unknown agent can justify the passive.",evidence(tokens),metrics.sentences);
+      const auto message=!ste(o)?"Possible passive construction. Review whether the reader needs the actor or the result in focus; do not invent an actor.":o.text_type=="procedure"?"Possible passive construction. Confirm the action and responsible actor; do not invent an agent.":"Possible passive construction. For STE descriptions, an unknown agent can justify the passive.";
+      add(ste(o)?"STE-3.6":"PL-ACTIVE","review",message,evidence(tokens),metrics.sentences);
     }
     prepare(tokens,o,vocabulary);
+    const bool coordinated=std::ranges::any_of(tokens,[](const auto& x){return x.text=="," || x.text==";";}) &&
+      std::ranges::any_of(tokens,[](const auto& x){return x.text==";" || in(lower_copy(x.text),{"and","but"});});
+    if(coordinated && !split_independent(tokens)) add("CLARITY-SCOPE","review","Coordinated, reported or protected material was not automatically split. Review attribution, conditions and the scope of each clause before separating it.",evidence(tokens),metrics.sentences);
     bool ing=false, contraction=false, complex=false;
     for(std::size_t k=0;k<tokens.size();++k) {
       const auto& token=tokens[k];const auto w=lower_copy(token.text);
@@ -267,8 +289,15 @@ StandardMetrics audit(std::string_view text,const Options& o,const Vocabulary& v
       if(token.frozen) continue;
       if(w.size()>4 && w.ends_with("ing") && !in(w,{"during","something","anything","nothing","everything"})) ing=true;
       if(in(w,{"has","have","had"})) {
-        auto j=k+1; while(j<tokens.size() && space(tokens[j])) ++j;
-        if(j<tokens.size() && (lower_copy(tokens[j].text)=="been" || lower_copy(tokens[j].text).ends_with("ed"))) complex=true;
+        auto j=k+1;
+        for(int seen=0;seen<4 && j<tokens.size();++seen) {
+          while(j<tokens.size() && space(tokens[j])) ++j;
+          if(j==tokens.size() || !tokens[j].word) break;
+          const auto next=lower_copy(tokens[j].text);
+          if(next=="been" || past_verbs().contains(next) || (next.size()>3 && next.ends_with("ed")) || in(next,{"done","gone","seen","taken","given","known"})) {complex=true;break;}
+          if(next!="not" && !is_known_adverb_word(next)) break;
+          ++j;
+        }
       }
       if(ste(o) && !o.vocabulary.empty() && !vocabulary.spellings.contains(w)) unknown.insert(w);
     }
@@ -284,6 +313,7 @@ StandardMetrics audit(std::string_view text,const Options& o,const Vocabulary& v
 
 std::vector<VocabularyEntry> parse_vocabulary(std::string_view tsv) {
   if(tsv.size()>1000000) throw std::invalid_argument("vocabulary input limit is 1000000 UTF-8 bytes");
+  if(tsv.starts_with("\xEF\xBB\xBF")) tsv.remove_prefix(3);
   std::istringstream input{std::string(tsv)}; Options options; options.profile="ste";
   std::set<std::string> seen;
   for(std::string line;std::getline(input,line);) {

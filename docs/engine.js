@@ -1377,7 +1377,7 @@ export function rewrite(input, options = {}, resources) {
   if (options.style !== undefined && !["balanced", "close", "recast"].includes(options.style)) throw new RangeError("Style must be balanced, close, or recast.");
   if ((options.profile ?? "variation") !== "variation") return rewriteStandard(input, options, resources,
     { splitPieces, freezeQuotes, freezePhrases, freezeNames, freezeTerms, lower, lowerChar, upperChar, applyCaps,
-      DETERMINERS, PRONOUNS, AUX, PREPS, coordinator, subordinatorWord, knownAdverb });
+      DETERMINERS, PRONOUNS, AUX, PREPS, coordinator, subordinatorWord, knownAdverb, looksLikeVerb });
   if (options.checkOnly) throw new RangeError("check-only requires a standards profile");
   const settings = {
     style: options.style ?? "balanced",

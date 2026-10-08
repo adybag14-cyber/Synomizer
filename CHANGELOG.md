@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.1 - 2026-10-08
+
+- Keep auxiliary-led reported statements and certainty/attitude clauses attached instead of promoting their contents into independent claims. Clause splitting now requires reviewed direct state/action frames; unsupported coordinated material receives a `CLARITY-SCOPE` author-review finding.
+- Extend STE tense screening to supported irregular participles and intervening adverbs or negation, without rewriting completed-action meaning. Keep plain-language passive guidance separate from STE-specific requirements.
+- Accept a UTF-8 byte-order mark in authorized vocabulary TSV input consistently in the browser API and native CLI. Preserve size limits and data provenance warnings.
+- Add independent expected-output native/browser regressions and verify that text downloads contain only the selected text, not report labels. Standards modes remain deterministic and transformer-free; Bonsai 2 remains an external, optional research path.
+
 ## 1.4.0 - 2026-10-08
 
 - Add transformer-free STE, plain-language and combined authoring profiles, independent of the three-variation engine. Produce one consistent draft or a check-only report.

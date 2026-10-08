@@ -24,7 +24,10 @@ Text is processed locally in the browser. There are no accounts, analytics, exte
 
 The browser implementation is JavaScript, **not a native C++ executable or WebAssembly build**. It mirrors the C++ reference rules and reads the same versioned data files. Cross-engine tests compare both rewritten text and complete change records, including full-width 64-bit seeds.
 
-## Standards-oriented authoring (1.4.0)
+## Standards-oriented authoring (1.4.1)
+
+The 1.4.1 update preserves auxiliary-led reported and uncertain clauses rather than splitting off their claims. Unsupported coordination produces a `CLARITY-SCOPE` review finding. Tense screening recognizes supported irregular forms and intervening words; vocabulary import accepts UTF-8 BOMs. Text downloads remain text-only, while JSON exports retain settings, edits and review findings.
+
 
 Choose **ASD-STE100 authoring aid**, **ISO 24495-1 plain-language aid**, or **STE + plain-language aid** in the Writing mode control. These are separate from synonym variation: they return **one deterministic clarity draft** and a review report. **Check only** preserves the text (apart from the documented line-ending normalization) and reports findings without rewriting.
 

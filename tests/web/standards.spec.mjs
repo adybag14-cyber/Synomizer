@@ -114,3 +114,38 @@ test('coverage documentation distinguishes standards assistance from full compli
   await expect(page.locator('main')).toContainText('researched, not embedded');
   expect(await page.locator('iframe').count()).toBe(0);
 });
+
+
+test('standards preserve auxiliary-led reported claims and export text without review labels', async ({page}) => {
+  await loaded(page);
+  const source = 'The operator has said the valve is open, and the light is on. Do not exceed 5 bar.';
+  for (const profile of ['ste','plain','combined']) {
+    await mode(page, profile); await rewrite(page, source);
+    await expect(page.locator('#output')).toHaveText(source);
+    await expect(page.locator('#standard-findings')).toContainText('CLARITY-SCOPE');
+    const report = await download(page, '#export-changes');
+    expect(report.changes).toEqual([]);
+    expect(report.standards.findings.some(f => f.code === 'CLARITY-SCOPE')).toBe(true);
+    const waiting = page.waitForEvent('download'); await page.locator('#download').click();
+    const file = await waiting;
+    expect(await readFile(await file.path(), 'utf8')).toBe(source);
+  }
+  await page.locator('#check-only').check();
+  await rewrite(page, 'The engineer has already written the report.');
+  const report = await download(page, '#export-changes');
+  expect(report.text).toBe('The engineer has already written the report.');
+  expect(report.changes).toEqual([]);
+  expect(report.standards.findings.some(f => f.code === 'STE-3.2')).toBe(true);
+});
+
+test('BOM-prefixed vocabulary can be pasted as well as imported, with exact replay metadata', async ({page}) => {
+  await loaded(page); await mode(page, 'ste');
+  const tsv = '\ufeff# UTF-8 terminology\nutilize\tnoun\tA local component label\ttechnical-noun\n';
+  await page.locator('#vocabulary').fill(tsv);
+  await rewrite(page, 'Utilize was printed on the label.');
+  await expect(page.locator('#banner')).toBeHidden();
+  await expect(page.locator('#output')).toHaveText('Utilize was printed on the label.');
+  const report = await download(page, '#export-changes');
+  expect(report.options.vocabulary).toEqual([{term:'utilize',pos:'noun',meaning:'A local component label',category:'technical-noun'}]);
+  expect(report.standards.vocabularyEntries).toBe(1);
+});
