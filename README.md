@@ -24,35 +24,51 @@ Text is processed locally in the browser. There are no accounts, analytics, exte
 
 The browser implementation is JavaScript, **not a native C++ executable or WebAssembly build**. It mirrors the C++ reference rules and reads the same versioned data files. Cross-engine tests compare both rewritten text and complete change records, including full-width 64-bit seeds.
 
-## Standards-oriented authoring (1.4.1)
+## Standards conversion and guarded release (1.5.0)
 
-The 1.4.1 update preserves auxiliary-led reported and uncertain clauses rather than splitting off their claims. Unsupported coordination produces a `CLARITY-SCOPE` review finding. Tense screening recognizes supported irregular forms and intervening words; vocabulary import accepts UTF-8 BOMs. Text downloads remain text-only, while JSON exports retain settings, edits and review findings.
+Choose **ASD-STE100 authoring aid**, **ISO 24495-1 plain-language aid**, or **STE + plain-language aid**. The standards path returns one deterministic draft and a structured report, not three synonymous alternatives. No transformer, language model, WebGPU inference or external rewriting service is used.
 
+**This release does not guarantee conformity for arbitrary text.** It distinguishes generating a draft from releasing text as conformant. Rule coverage, short sentences, a matching glossary and a matching hash do not establish correct meaning, approved word senses or reader usability.
 
-Choose **ASD-STE100 authoring aid**, **ISO 24495-1 plain-language aid**, or **STE + plain-language aid** in the Writing mode control. These are separate from synonym variation: they return **one deterministic clarity draft** and a review report. **Check only** preserves the text (apart from the documented line-ending normalization) and reports findings without rewriting.
+### Expanded model-free conversion
 
-This is a **partial authoring aid, not a complete standards converter or conformance checker**. It does not claim full ASD-STE100 or ISO 24495-1 conformity, semantic equivalence, dictionary approval, or reader validation. No transformer, model weights, WebGPU inference or external rewriting API is required.
+Alongside directional clarity edits and supported explicit-actor passives, the converter can separate reviewed descriptive clause patterns and format supported nominal enumerations as vertical lists. It preserves the original list order, conjunction (`and` versus `or`), reporting prefix and conditional context. Lists can be disabled with **Format supported enumerations as lists** or `--no-structured-lists`. Unsupported shared-head lists, reported assertions, modal clauses, quotations, numbers in lists and protected structures remain unchanged rather than being guessed. The text may still require editorial work.
 
-The new profiles apply a small independent set of directional phrase simplifications, expand unambiguous contractions, rewrite supported simple-past passives only when an explicit actor is present, and separate supported independent clauses. They do not use the academic expansion or synonym-diversity engine. Conditions, negation, obligations, protected terms and uncertain constructions constrain edits. Unsupported sentences can remain unchanged even when they still need editing.
+The count screen recognizes supported vertical-list leads/items, balanced double-quoted or parenthetical groups, common number/unit combinations and hyphenated words. Counts are still **estimates, not complete ASD-STE100 section 8 verification**. Parenthetical inner counts, names/titles, complex layouts and all other counting cases remain review tasks. ISO 24495-1 does not mandate the app's 25-word screening target.
 
-The STE length screen uses 20 words for procedures and 25 for descriptions/notes, but **counts are estimates, not the complete section 8 method**. ISO 24495-1 does not impose this application's 25-word heuristic. Reports also flag possible passives, selected tense/-ing patterns and unresolved contractions; these are review cues, not categorical violations. All reports remain `review-required` and `semanticEquivalenceVerified: false`.
+A selected numeric/logical-marker check compares source and draft. A change to those markers causes all draft edits to roll back. This is a conservative safeguard, **not a semantic-equivalence test**: matching markers cannot prove correct relationships, word senses or the truth of a claim.
 
-Audience and purpose are recorded for the plain-language process. Review prompts cover relevance, findability, understanding and usability. The software does not test the text with readers or verify the document's organization, layout or sufficiency.
+### Strict text-release gate
 
-An optional authorized vocabulary can be pasted or imported locally as UTF-8 TSV with four columns: `term`, `part of speech`, `intended meaning`, `category` (no header; `#` starts a comment). Categories are `general`, `technical-noun`, `technical-verb`, `name`, and `title`. A technical category must agree with its noun/verb part of speech. Non-general entries are protected. General entries support **spelling screening only**: their completeness, authority, meanings and grammatical use are not established. Limits: 5,000 entries, 1,000,000 total UTF-8 bytes, 200 bytes per term, 500 per meaning. The official STE dictionary and ISO document are not bundled or relicensed under Apache-2.0.
+In browser standards modes, **Block text export until conformity is verified** is checked by default. The draft and diagnostics remain visible, but text copy and text-download actions are disabled while the report has unresolved requirements. Uncheck this control only to export an **unverified draft**. This does not turn any requirement into a pass. Existing three-variation mode retains its ordinary copy/download behaviour.
 
-Browser JSON exports include the report and complete reproduction settings, including supplied vocabulary, audience and purpose. CLI JSON includes the report; retain the invocation and vocabulary file to reproduce it. Treat exports as potentially sensitive. Text-only exports contain the draft, not a conformity claim.
+The CLI enables the equivalent opt-in gate with `--require-conformity`. A blocked decision exits with code **3**, writes no final text to stdout, and never creates or truncates the path supplied to `--output`. Explicit `--json` without `--output` can return a diagnostic draft report on stdout while still exiting 3. A report containing draft text is not a released conformant document.
 
 ```sh
-./build/synomizer --profile ste --text-type procedure --json instructions.txt
-./build/synomizer --profile plain --audience "New technicians" --purpose "Inspect a valve" input.txt
-./build/synomizer --profile combined --check-only input.txt
-./build/synomizer --profile ste --vocabulary authorized-terms.tsv --json input.txt
+# Draft workflow: output is not claimed conformant.
+./build/synomizer --profile combined --audience "Maintenance staff" --purpose "Inspect a valve" input.txt
+
+# Strict workflow: blocks, exits 3 and leaves any existing final.txt untouched.
+./build/synomizer --profile ste --require-conformity --output final.txt input.txt
+
+# Diagnostic workflow: draft/report JSON on stdout, exit 3 if release is blocked.
+./build/synomizer --profile combined --require-conformity --json input.txt
+
+# Check-only: no editing, apart from documented LF line-ending normalization.
+./build/synomizer --profile plain --check-only input.txt
 ```
 
-`--check-only` implies JSON output and requires a standards profile. Even with `--variants 3`, standards profiles return one result rather than inventing inconsistent terminology. Existing operation switches and protected terms still apply. Plain-text CLI output warns that the draft is unverified; use `--json` for the report.
+**There is deliberately no automatic approval path in 1.5.0.** The report always identifies conformity as unverified. It includes all 53 ASD-STE100 Issue 9 rule identifiers where STE is selected, plus four ISO principle-level review entries where plain language is selected. The ISO entries are not a complete enumeration of the standard's detailed guidelines. Every entry states `not-verified` or requests attention; an unimplemented check cannot silently pass. Hashes bind the normalized source and draft bytes, not a signature, identity, approval or semantic proof.
 
-See the [coverage and source notes](docs/standards.html) for requirements that remain manual and links to ASD-STE100 Issue 9, ISO 24495-1:2023 and the standards organizations.
+### Authoring context and terminology
+
+Reader/task fields, procedure/description selection, quotation protection and protected terms remain available. Custom protected terms prevent the matching sentence from being rearranged. Authorized vocabulary TSV contains four columns: `term`, `part of speech`, `intended meaning`, `category`. The categories are `general`, `technical-noun`, `technical-verb`, `name`, and `title`. Technical category and grammatical role must agree; a UTF-8 BOM is accepted. Limits remain 5,000 entries, 1,000,000 total bytes, 200 bytes per term and 500 per meaning.
+
+No official dictionary or ISO standard text is bundled. Imported data supports spelling screening and term protection, not proof of dictionary completeness or approved senses/forms. Full standards review requires the authorized reference and contextual evaluation. Reader relevance, findability, understanding and usability require evidence beyond text substitution.
+
+Diagnostic JSON includes source/draft digests, exact browser settings, supplied terminology, changes, review findings and the blocked release decision. Treat reports as sensitive: they can contain the original and draft. **Check only** and strict release are separate controls. An unchanged input, empty document or zero length findings never proves conformity.
+
+See [coverage and source notes](docs/standards.html). Native and browser implementations are tested for exact text, change and report parity, including write-protection on failed CLI release.
 
 ### Optional Bonsai 2 / WebGPU investigation
 

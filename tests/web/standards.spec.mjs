@@ -8,6 +8,8 @@ async function loaded(page) {
 }
 async function mode(page, profile) {
   await page.locator('#profile').selectOption(profile);
+  // These legacy cases explicitly test the unverified-draft export path.
+  await page.locator('#require-conformity').uncheck();
   await page.locator('#rewrite').click();
   await expect(page.locator('#status')).toContainText('review required');
 }

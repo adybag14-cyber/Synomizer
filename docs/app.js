@@ -3,7 +3,7 @@ import { parseVocabulary } from "./standards.js";
 // SPDX-License-Identifier: Apache-2.0
 const SAMPLE = "The careful teacher helped the happy children. Because the weather was cold, the class started the project late. She quietly explained the main idea, and the students were glad to assist. They purchased a small car for the school trip and quickly found the correct route. The calm physician said the tired boy was healthy. Although the journey was long, the group remained cheerful. The writer described the final result in an honest report. The crowd was silent when the meeting ended. The local students found a useful answer and remained calm. It was a small victory.";
 
-const VERSION = "1.4.1";
+const VERSION = "1.5.0";
 const $ = (selector) => document.querySelector(selector);
 const source = $("#source"), status = $("#status"), banner = $("#banner");
 const changes = $("#changes"), seed = $("#seed"), intensity = $("#intensity"), grid = $("#variations");
@@ -19,13 +19,26 @@ const escapeHtml = (text) => text.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "
 function current(index = latest?.selected) {
   return !busy && latest?.id === revision ? latest.batch.variations[index] : null;
 }
+function canExportText(variant) {
+  // Enforce the originating request, not just metadata returned by the worker.
+  // Missing/stale reproduction fields must never silently disable strict mode.
+  const strict = latest?.baseOptions?.requireConformity === true || variant?.options?.requireConformity === true;
+  const assessment=variant?.result.standards?.conformity;
+  return !!variant?.result.text.length && !(strict && !(assessment?.releaseAllowed === true && assessment?.conformityVerified === true));
+}
 function exportsEnabled(enabled) {
-  const allowed = enabled && !!current()?.result.text.length;
-  for (const id of ["#copy", "#download", "#export-changes", "#export-all"]) $(id).disabled = !allowed;
+  const variant = current(), present = enabled && !!variant;
+  const textAllowed = present && canExportText(variant);
+  for (const id of ["#copy", "#download"]) $(id).disabled = !textAllowed;
+  const reportAllowed = present && (!!variant.result.text.length || !!variant.result.standards);
+  for (const id of ["#export-changes", "#export-all"]) $(id).disabled = !reportAllowed;
   cards.forEach((card, index) => {
-    const present = enabled && !!current(index);
-    card.querySelector("input").disabled = !present;
-    for (const button of card.querySelectorAll("button")) button.disabled = !present || !current(index).result.text.length;
+    const v=current(index), exists=enabled&&!!v;
+    card.querySelector("input").disabled=!exists;
+    for(const button of card.querySelectorAll("button")) {
+      const textAction=["copy","download"].includes(button.dataset.action);
+      button.disabled=!exists || (textAction ? !canExportText(v) : !v.result.text.length && !v.result.standards);
+    }
   });
 }
 function clearResults() {
@@ -65,7 +78,23 @@ function updateMode() {
   $("#variation-guidance").hidden = standard;
   $("#word-operation-label").textContent = standard ? "Clarity word edits" : "Synonyms";
 }
+function renderConformity(c) {
+  $("#conformity-panel").hidden=!c;
+  $("#conformity-blockers").replaceChildren();
+  $("#rule-coverage tbody").replaceChildren();
+  $("#coverage-panel").hidden=true; $("#coverage-toggle").setAttribute("aria-expanded","false");
+  if(!c){$("#conformity-state").textContent="";$("#conformity-binding").textContent="";return;}
+  $("#conformity-state").textContent=c.releaseAllowed ? "Release verified for the reported scope." :
+    `Conformity not established. ${c.strictRequested ? "Text copy/download is blocked." : "Only an unverified draft can be copied or downloaded."}`;
+  $("#conformity-binding").textContent=`Source SHA-256: ${c.sourceSha256} / Draft SHA-256: ${c.draftSha256}. Marker check: ${c.invariantCheck}. Hashes bind text bytes; they do not prove meaning or approval.`;
+  for(const text of c.blockers){const li=document.createElement("li");li.textContent=text;$("#conformity-blockers").append(li);}
+  const fragment=document.createDocumentFragment();
+  for(const r of c.requirements){const row=document.createElement("tr");for(const text of [`${r.standard} / ${r.rule}`,r.method,r.result]){const td=document.createElement("td");td.textContent=text;row.append(td);}row.title=r.note;fragment.append(row);}
+  $("#rule-coverage tbody").append(fragment);
+  $("#coverage-summary").textContent=`${c.requirements.length} reference entries. STE entries enumerate Issue 9 rule IDs; ISO entries cover four principles, not every guideline. No unverified entry is counted as a pass.`;
+}
 function renderStandards(report) {
+  renderConformity(report?.conformity);
   $("#standards-report").hidden = !report;
   $("#standard-findings").replaceChildren();
   if (!report) { $("#standards-summary").textContent = ""; $("#standards-metrics").textContent = ""; return; }
@@ -89,7 +118,7 @@ function optionsFromForm() {
     arrange: $("#arrange").checked, protectQuotes: $("#quotes").checked,
     protectedTerms: $("#protected").value.split(/\r?\n/).map((term) => term.trim()).filter(Boolean) };
   if (standard) Object.assign(options, { profile: $("#profile").value, textType: $("#text-type").value,
-    checkOnly: $("#check-only").checked, audience: $("#audience").value, purpose: $("#purpose").value,
+    checkOnly: $("#check-only").checked, requireConformity: $("#require-conformity").checked, structuredLists: $("#structured-lists").checked, audience: $("#audience").value, purpose: $("#purpose").value,
     vocabulary: parseVocabulary($("#vocabulary").value) });
   return options;
 }
@@ -216,7 +245,7 @@ function schedule() {
 source.value = SAMPLE;
 source.addEventListener("input", schedule);
 for (const control of [seed, intensity, $("#synonyms"), $("#arrange"), $("#quotes"), $("#protected")]) control.addEventListener("input", schedule);
-for (const control of [$("#profile"), $("#text-type"), $("#check-only"), $("#audience"), $("#purpose"), $("#vocabulary")]) {
+for (const control of [$("#profile"), $("#text-type"), $("#check-only"), $("#require-conformity"), $("#structured-lists"), $("#audience"), $("#purpose"), $("#vocabulary")]) {
   control.addEventListener("input", () => { updateMode(); schedule(); });
 }
 
@@ -228,7 +257,7 @@ $("#variant").addEventListener("click", () => {
 $("#reset").addEventListener("click", () => {
   source.value = SAMPLE; seed.value = "1"; intensity.value = "1";
   $("#synonyms").checked = $("#arrange").checked = $("#quotes").checked = true;
-  $("#protected").value = ""; $("#profile").value = "variation"; $("#check-only").checked = false; updateMode(); requestRewrite();
+  $("#protected").value = ""; $("#profile").value = "variation"; $("#check-only").checked = false; $("#require-conformity").checked = $("#structured-lists").checked = true; updateMode(); requestRewrite();
 });
 $("#clear").addEventListener("click", () => { source.value = ""; requestRewrite(); source.focus(); });
 $("#cancel").addEventListener("click", () => {
@@ -236,7 +265,7 @@ $("#cancel").addEventListener("click", () => {
 });
 $("#retry").addEventListener("click", () => { invalidate(); clearError(); pending = true; startWorker(); });
 async function copy(index = latest?.selected) {
-  const variant = current(index); if (!variant) return;
+  const variant = current(index); if (!variant || !canExportText(variant)) return;
   const id = revision;
   try { await navigator.clipboard.writeText(variant.result.text); if (revision === id) status.textContent = `Copied variation ${index+1}.`; }
   catch { if (revision === id) { banner.hidden = false; banner.textContent = "Clipboard access was refused. Select the rewrite and copy it, or download the text."; } }
@@ -248,11 +277,11 @@ function download(text, name, type) {
 }
 function report(variant) {
   const output = { version: VERSION, seed: variant.options.seed, style: variant.options.style, options: variant.options, text: variant.result.text, changes: variant.result.changes };
-  if (variant.result.standards) output.standards = variant.result.standards;
+  if (variant.result.standards) { output.standards = variant.result.standards; output.classification = "unverified-draft-report"; }
   return output;
 }
 function saveText(index = latest?.selected, name = "synomizer-rewrite.txt") {
-  const variant = current(index); if (variant) download(variant.result.text, name, "text/plain;charset=utf-8");
+  const variant = current(index); if (variant && canExportText(variant)) download(variant.result.text, name, "text/plain;charset=utf-8");
 }
 function saveReport(index = latest?.selected, name = "synomizer-changes.json") {
   const variant = current(index); if (variant) download(JSON.stringify(report(variant), null, 2)+"\n", name, "application/json");
@@ -309,5 +338,9 @@ $("#vocabulary-file").addEventListener("change", async () => {
   } catch (error) {
     if (importId === vocabularyImportRevision && initialRevision === revision) { banner.hidden = false; banner.textContent = `Could not import vocabulary: ${error.message}`; }
   } finally { if (importId === vocabularyImportRevision) $("#vocabulary-file").value = ""; }
+});
+$("#coverage-toggle").addEventListener("click",()=>{
+  const hidden=$("#coverage-panel").hidden;
+  $("#coverage-panel").hidden=!hidden; $("#coverage-toggle").setAttribute("aria-expanded",String(hidden));
 });
 updateMode(); invalidate(); pending = true; startWorker();
