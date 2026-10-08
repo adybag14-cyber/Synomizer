@@ -24,6 +24,19 @@ int main() {
   expect(rewrite("Utilize was printed on the label.",o).text=="Utilize was printed on the label.","technical term protection");
   try { (void)parse_vocabulary("x\tnoun\ty\ttechnical-verb\n"); expect(false,"invalid vocabulary rejected"); } catch(const std::invalid_argument&) {}
   o.vocabulary.clear();
+  for(const std::string text : {
+    "The operator has said the valve is open, and the light is on.",
+    "She may think the valve is open, but the switch is off.",
+    "The engineer is certain the motor works, and the pressure is low."}) {
+    const auto guarded=rewrite(text,o);
+    expect(guarded.text==text && guarded.changes.empty(),"reported scope not detached");
+    bool warned=false;
+    if(guarded.standards) for(const auto& f:guarded.standards->findings) warned=warned || f.code=="CLARITY-SCOPE";
+    expect(warned,"blocked clause carries author review finding");
+  }
+  o.vocabulary=parse_vocabulary("\xEF\xBB\xBF# UTF-8 header\r\nutilize\tnoun\tA local label\ttechnical-noun\r\n");
+  expect(o.vocabulary.size()==1 && o.vocabulary.front().term=="utilize","UTF-8 BOM does not change first term");
+  o.vocabulary.clear();
   std::string long_text;
   for(int i=0;i<600;++i) long_text+="The valve was opened. ";
   r=rewrite(long_text,o);

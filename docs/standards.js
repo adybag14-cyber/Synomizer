@@ -28,6 +28,7 @@ function validate(o) {
 }
 export function parseVocabulary(tsv) {
   if (typeof tsv !== "string" || bytes(tsv) > 1000000) throw new RangeError("vocabulary input limit is 1000000 UTF-8 bytes");
+  if (tsv.startsWith("\ufeff")) tsv = tsv.slice(1);
   const vocabulary = [], seen = new Set();
   for (let line of tsv.split("\n")) {
     line = line.replace(/\r$/, "");
@@ -119,10 +120,30 @@ export function rewriteStandard(input, options, resources, h) {
   };
   const independent = (t, a, b) => {
     const sub = t.slice(a, b), p = positions(sub); if (p.length < 3) return false;
-    const first = lower(sub[p[0]].text);
-    const predicate = ["we", "you", "they", "he", "she", "it"].includes(first) ? 1 : ["the", "this", "these", "those", "a", "an"].includes(first) ? 2 : -1;
-    if (predicate < 0 || predicate >= p.length) return false;
-    return ["is", "are", "was", "were", "am", "has", "have", "had", "can", "could", "may", "might", "must", "shall", "should", "will", "would", "does", "do", "did"].includes(lower(sub[p[predicate]].text));
+    const word = i => i < p.length ? lower(sub[p[i]].text) : "";
+    const first = word(0);
+    const predicate = ["we","you","they","he","she","it"].includes(first) ? 1 : ["the","this","these","those","a","an"].includes(first) ? 2 : p.length;
+    if (predicate + 1 >= p.length) return false;
+    const finite = word(predicate); let end = predicate + 1;
+    const state = w => ["open","closed","on","off","active","inactive","clean","dry","wet","ready","empty","full","available","unavailable","present","absent","damaged","broken","intact","stable","unstable","hot","cold","complete","incomplete"].includes(w);
+    const base = w => [...PAST.values()].includes(w);
+    // Only reviewed direct states/actions, not auxiliary-led reported claims.
+    if (["is","are","was","were","am"].includes(finite)) {
+      if (word(end) === "being") { end++; if (!PAST.has(word(end))) return false; }
+      else if (!state(word(end)) && !PAST.has(word(end))) return false;
+    } else if (["has","have","had"].includes(finite)) {
+      if (word(end) === "been") end++;
+      if (word(end) === "being") end++;
+      if (!PAST.has(word(end))) return false;
+    } else if (["can","could","may","might","must","shall","should","will","would","does","do","did"].includes(finite)) {
+      if (word(end) === "be") { end++; if (!state(word(end)) && !PAST.has(word(end))) return false; }
+      else if (!base(word(end))) return false;
+    } else return false;
+    for (end++; end < p.length; end++) {
+      const w = word(end);
+      if (h.AUX.has(w) || h.coordinator(w) || h.subordinatorWord(w) || h.looksLikeVerb(resources, w)) return false;
+    }
+    return true;
   };
   const splitIndependent = t => {
     if (t.length > 600 || t.at(-1)?.text !== ".") return null;
@@ -192,9 +213,12 @@ export function rewriteStandard(input, options, resources, h) {
       }
       if (passive(t)) {
         metrics.possiblePassives++;
-        add(STE(o) ? "STE-3.6" : "PL-ACTIVE", "review", o.textType === "procedure" ? "Possible passive construction. Confirm the action and responsible actor; do not invent an agent." : "Possible passive construction. For STE descriptions, an unknown agent can justify the passive.", evidence(t), metrics.sentences);
+        const message = !STE(o) ? "Possible passive construction. Review whether the reader needs the actor or the result in focus; do not invent an actor." : o.textType === "procedure" ? "Possible passive construction. Confirm the action and responsible actor; do not invent an agent." : "Possible passive construction. For STE descriptions, an unknown agent can justify the passive.";
+        add(STE(o) ? "STE-3.6" : "PL-ACTIVE", "review", message, evidence(t), metrics.sentences);
       }
       prepare(t);
+      const coordinated = t.some(x => x.text === "," || x.text === ";") && t.some(x => x.text === ";" || ["and","but"].includes(lower(x.text)));
+      if (coordinated && !splitIndependent(t)) add("CLARITY-SCOPE", "review", "Coordinated, reported or protected material was not automatically split. Review attribution, conditions and the scope of each clause before separating it.", evidence(t), metrics.sentences);
       let ing = false, contraction = false, complex = false;
       for (let k = 0; k < t.length; k++) {
         const token = t[k], w = lower(token.text); if (!token.word) continue;
@@ -202,8 +226,15 @@ export function rewriteStandard(input, options, resources, h) {
         if (token.frozen) continue;
         if (w.length > 4 && w.endsWith("ing") && !["during", "something", "anything", "nothing", "everything"].includes(w)) ing = true;
         if (["has", "have", "had"].includes(w)) {
-          let j = k+1; while (j < t.length && space(t[j])) j++;
-          if (j < t.length && (lower(t[j].text) === "been" || lower(t[j].text).endsWith("ed"))) complex = true;
+          let j = k+1;
+          for (let seen = 0; seen < 4 && j < t.length; seen++) {
+            while (j < t.length && space(t[j])) j++;
+            if (j === t.length || !t[j].word) break;
+            const next = lower(t[j].text);
+            if (next === "been" || PAST.has(next) || (next.length > 3 && next.endsWith("ed")) || ["done","gone","seen","taken","given","known"].includes(next)) { complex = true; break; }
+            if (next !== "not" && !h.knownAdverb(resources, next)) break;
+            j++;
+          }
         }
         if (STE(o) && o.vocabulary.length && !spellings.has(w)) unknown.add(w);
       }
