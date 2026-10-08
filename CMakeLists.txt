@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Synomizer VERSION 1.4.1 LANGUAGES CXX)
+project(Synomizer VERSION 1.5.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -51,6 +51,8 @@ add_library(synomizer-lib STATIC
   src/adjuncts.cpp
   src/academic.cpp
   src/standards.cpp
+  src/standard_structure.cpp
+  src/conformity.cpp
 )
 target_include_directories(synomizer-lib
   PUBLIC include
@@ -137,3 +139,15 @@ if(MINGW)
   target_link_options(synomizer-standards-tests PRIVATE -static -static-libgcc -static-libstdc++)
 endif()
 add_test(NAME standards COMMAND synomizer-standards-tests)
+
+add_executable(synomizer-conformity-tests tests/test_conformity.cpp)
+target_link_libraries(synomizer-conformity-tests PRIVATE synomizer-lib)
+if(MSVC)
+  target_compile_options(synomizer-conformity-tests PRIVATE /W4 /permissive- /Zc:__cplusplus /EHsc /utf-8)
+else()
+  target_compile_options(synomizer-conformity-tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+if(MINGW)
+  target_link_options(synomizer-conformity-tests PRIVATE -static -static-libgcc -static-libstdc++)
+endif()
+add_test(NAME conformity COMMAND synomizer-conformity-tests)

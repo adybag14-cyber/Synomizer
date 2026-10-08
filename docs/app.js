@@ -3,7 +3,7 @@ import { parseVocabulary } from "./standards.js";
 // SPDX-License-Identifier: Apache-2.0
 const SAMPLE = "The careful teacher helped the happy children. Because the weather was cold, the class started the project late. She quietly explained the main idea, and the students were glad to assist. They purchased a small car for the school trip and quickly found the correct route. The calm physician said the tired boy was healthy. Although the journey was long, the group remained cheerful. The writer described the final result in an honest report. The crowd was silent when the meeting ended. The local students found a useful answer and remained calm. It was a small victory.";
 
-const VERSION = "1.4.1";
+const VERSION = "1.5.0";
 const $ = (selector) => document.querySelector(selector);
 const source = $("#source"), status = $("#status"), banner = $("#banner");
 const changes = $("#changes"), seed = $("#seed"), intensity = $("#intensity"), grid = $("#variations");
@@ -19,13 +19,19 @@ const escapeHtml = (text) => text.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "
 function current(index = latest?.selected) {
   return !busy && latest?.id === revision ? latest.batch.variations[index] : null;
 }
+function textReleaseAllowed(index = latest?.selected) {
+  const variant=current(index);
+  return !!variant && (!variant.options.requireConformity || variant.result.standards?.conformity?.releaseAllowed===true);
+}
 function exportsEnabled(enabled) {
   const allowed = enabled && !!current()?.result.text.length;
-  for (const id of ["#copy", "#download", "#export-changes", "#export-all"]) $(id).disabled = !allowed;
+  for (const id of ["#export-changes", "#export-all"]) $(id).disabled = !allowed;
+  for (const id of ["#copy", "#download"]) $(id).disabled = !allowed || !textReleaseAllowed();
   cards.forEach((card, index) => {
     const present = enabled && !!current(index);
     card.querySelector("input").disabled = !present;
-    for (const button of card.querySelectorAll("button")) button.disabled = !present || !current(index).result.text.length;
+    for (const button of card.querySelectorAll("button")) button.disabled = !present || !current(index).result.text.length ||
+      (["copy","download"].includes(button.dataset.action) && !textReleaseAllowed(index));
   });
 }
 function clearResults() {
@@ -68,18 +74,29 @@ function updateMode() {
 function renderStandards(report) {
   $("#standards-report").hidden = !report;
   $("#standard-findings").replaceChildren();
+  $("#release-blockers").replaceChildren();$("#rule-coverage").replaceChildren();
+  $("#release-decision").textContent="";$("#report-binding").textContent="";
+  $("#coverage-panel").hidden=true;$("#show-coverage").setAttribute("aria-expanded","false");
   if (!report) { $("#standards-summary").textContent = ""; $("#standards-metrics").textContent = ""; return; }
   $("#standards-summary").textContent = `${STANDARD_NAMES[report.profile]}: review required. Full conformity and semantic equivalence have not been verified.`;
-  $("#standards-metrics").textContent = `Screening only: longest sentence ${report.before.longestSentence} → ${report.after.longestSentence} words; sentences above the target ${report.before.longSentences} → ${report.after.longSentences}; possible passives ${report.before.possiblePassives} → ${report.after.possiblePassives}. Imported vocabulary: ${report.vocabularyEntries} entries. The ${report.sentenceTarget}-word target is not an ISO requirement; STE counts need section 8 review.`;
+  $("#standards-metrics").textContent = `Screening only: longest sentence ${report.before.longestSentence} → ${report.after.longestSentence} words; count units above the target ${report.before.longSentences} → ${report.after.longSentences}; possible passives ${report.before.possiblePassives} → ${report.after.possiblePassives}. Imported vocabulary: ${report.vocabularyEntries} entries. The ${report.sentenceTarget}-word target is not an ISO requirement; STE counts need section 8 review.`;
   const fragment = document.createDocumentFragment();
   for (const finding of report.findings) {
     const li = document.createElement("li"), title = document.createElement("strong"), text = document.createElement("p");
-    title.textContent = `${finding.code}${finding.sentence ? ` / sentence ${finding.sentence}` : ""}`;
+    title.textContent = `${finding.code}${finding.sentence ? ` / screening unit ${finding.sentence}` : ""}`;
     text.textContent = finding.message; li.append(title, text);
     if (finding.evidence) { const quote = document.createElement("p"); quote.className = "finding-evidence"; quote.textContent = finding.evidence; li.append(quote); }
     fragment.append(li);
   }
   $("#standard-findings").append(fragment);
+  const c=report.conformity;
+  if(c) {
+    $("#release-decision").textContent=c.strictRequested ? "STRICT RELEASE BLOCKED: final-text copy/download is disabled. The candidate below is an unverified draft; report export remains available." : "UNVERIFIED DRAFT: conformity is not established. Enable strict release to withhold text exports.";
+    $("#report-binding").textContent=`SHA-256 of LF-normalized source: ${c.sourceSha256}\nSHA-256 of draft: ${c.draftSha256}\nThese fingerprints identify text; they are not approval signatures or semantic proofs.`;
+    for(const reason of c.blockers){const li=document.createElement("li");li.textContent=reason;$("#release-blockers").append(li);}
+    for(const r of c.requirements){const row=document.createElement("tr");for(const value of [r.standard+" / "+r.rule,r.method,r.result,r.note]){const cell=document.createElement("td");cell.textContent=value;row.append(cell);}$("#rule-coverage").append(row);}
+    $("#show-coverage").textContent=`Show ${c.requirements.length} rule/principle review entries (not verified rules)`;
+  }
 }
 function optionsFromForm() {
   const standard = $("#profile").value !== "variation";
@@ -90,7 +107,8 @@ function optionsFromForm() {
     protectedTerms: $("#protected").value.split(/\r?\n/).map((term) => term.trim()).filter(Boolean) };
   if (standard) Object.assign(options, { profile: $("#profile").value, textType: $("#text-type").value,
     checkOnly: $("#check-only").checked, audience: $("#audience").value, purpose: $("#purpose").value,
-    vocabulary: parseVocabulary($("#vocabulary").value) });
+    vocabulary: parseVocabulary($("#vocabulary").value), requireConformity: $("#require-conformity").checked,
+    structuredLists: $("#structured-lists").checked });
   return options;
 }
 function renderLedger() {
@@ -216,7 +234,7 @@ function schedule() {
 source.value = SAMPLE;
 source.addEventListener("input", schedule);
 for (const control of [seed, intensity, $("#synonyms"), $("#arrange"), $("#quotes"), $("#protected")]) control.addEventListener("input", schedule);
-for (const control of [$("#profile"), $("#text-type"), $("#check-only"), $("#audience"), $("#purpose"), $("#vocabulary")]) {
+for (const control of [$("#profile"), $("#text-type"), $("#check-only"), $("#audience"), $("#purpose"), $("#vocabulary"), $("#require-conformity"), $("#structured-lists")]) {
   control.addEventListener("input", () => { updateMode(); schedule(); });
 }
 
@@ -236,7 +254,7 @@ $("#cancel").addEventListener("click", () => {
 });
 $("#retry").addEventListener("click", () => { invalidate(); clearError(); pending = true; startWorker(); });
 async function copy(index = latest?.selected) {
-  const variant = current(index); if (!variant) return;
+  const variant = current(index); if (!variant || !textReleaseAllowed(index)) return;
   const id = revision;
   try { await navigator.clipboard.writeText(variant.result.text); if (revision === id) status.textContent = `Copied variation ${index+1}.`; }
   catch { if (revision === id) { banner.hidden = false; banner.textContent = "Clipboard access was refused. Select the rewrite and copy it, or download the text."; } }
@@ -252,7 +270,7 @@ function report(variant) {
   return output;
 }
 function saveText(index = latest?.selected, name = "synomizer-rewrite.txt") {
-  const variant = current(index); if (variant) download(variant.result.text, name, "text/plain;charset=utf-8");
+  const variant = current(index); if (variant && textReleaseAllowed(index)) download(variant.result.text, name, "text/plain;charset=utf-8");
 }
 function saveReport(index = latest?.selected, name = "synomizer-changes.json") {
   const variant = current(index); if (variant) download(JSON.stringify(report(variant), null, 2)+"\n", name, "application/json");
@@ -310,4 +328,5 @@ $("#vocabulary-file").addEventListener("change", async () => {
     if (importId === vocabularyImportRevision && initialRevision === revision) { banner.hidden = false; banner.textContent = `Could not import vocabulary: ${error.message}`; }
   } finally { if (importId === vocabularyImportRevision) $("#vocabulary-file").value = ""; }
 });
+$("#show-coverage").addEventListener("click",()=>{const panel=$("#coverage-panel");panel.hidden=!panel.hidden;$("#show-coverage").setAttribute("aria-expanded",String(!panel.hidden));});
 updateMode(); invalidate(); pending = true; startWorker();

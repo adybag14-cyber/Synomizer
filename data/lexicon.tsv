@@ -343,3 +343,16 @@ usage	noun	use	free
 @clarity	shouldn't	should not	contraction
 @clarity	couldn't	could not	contraction
 @clarity	mustn't	must not	contraction
+
+@clarity	is dependent on	depends on	any
+@clarity	are dependent on	depend on	any
+@clarity	the present project	this project	any
+@clarity	the present study	this study	any
+@clarity	at this point in time	now	any
+@clarity	on an annual basis	each year	any
+@clarity	on a monthly basis	each month	any
+@clarity	in spite of the fact that	although	clause
+@clarity	as a consequence of	because of	noun
+@clarity	in the absence of	without	noun
+@clarity	for the duration of	during	noun
+@clarity	with regard to	about	noun

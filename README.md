@@ -24,18 +24,18 @@ Text is processed locally in the browser. There are no accounts, analytics, exte
 
 The browser implementation is JavaScript, **not a native C++ executable or WebAssembly build**. It mirrors the C++ reference rules and reads the same versioned data files. Cross-engine tests compare both rewritten text and complete change records, including full-width 64-bit seeds.
 
-## Standards-oriented authoring (1.4.1)
+## Standards-oriented conversion and review (1.5.0)
 
-The 1.4.1 update preserves auxiliary-led reported and uncertain clauses rather than splitting off their claims. Unsupported coordination produces a `CLARITY-SCOPE` review finding. Tense screening recognizes supported irregular forms and intervening words; vocabulary import accepts UTF-8 BOMs. Text downloads remain text-only, while JSON exports retain settings, edits and review findings.
+Version 1.5 adds supported terminal-enumeration formatting, positive descriptive-clause transformations, more directional clarity rules, grouped sentence-length screening, and a **strict release guard**. These expand conversion without turning an unverified draft into a conformity claim. Reported/uncertain scope remains protected; unsupported coordination receives `CLARITY-SCOPE` review findings.
 
 
 Choose **ASD-STE100 authoring aid**, **ISO 24495-1 plain-language aid**, or **STE + plain-language aid** in the Writing mode control. These are separate from synonym variation: they return **one deterministic clarity draft** and a review report. **Check only** preserves the text (apart from the documented line-ending normalization) and reports findings without rewriting.
 
 This is a **partial authoring aid, not a complete standards converter or conformance checker**. It does not claim full ASD-STE100 or ISO 24495-1 conformity, semantic equivalence, dictionary approval, or reader validation. No transformer, model weights, WebGPU inference or external rewriting API is required.
 
-The new profiles apply a small independent set of directional phrase simplifications, expand unambiguous contractions, rewrite supported simple-past passives only when an explicit actor is present, and separate supported independent clauses. They do not use the academic expansion or synonym-diversity engine. Conditions, negation, obligations, protected terms and uncertain constructions constrain edits. Unsupported sentences can remain unchanged even when they still need editing.
+The profiles apply independently authored directional phrase simplifications, expand unambiguous contractions, rewrite supported simple-past passives only when an explicit actor is present, separate reviewed direct/descriptive clauses, and format supported terminal enumerations as vertical lists. List formatting retains the original item order, words, and `and`/`or` relationship; subsequent prose is kept outside the final bullet. They do not use the academic expansion or synonym-diversity engine. Conditions, negation, obligations, protected terms and uncertain constructions constrain edits. Unsupported sentences can remain unchanged even when they still need editing.
 
-The STE length screen uses 20 words for procedures and 25 for descriptions/notes, but **counts are estimates, not the complete section 8 method**. ISO 24495-1 does not impose this application's 25-word heuristic. Reports also flag possible passives, selected tense/-ing patterns and unresolved contractions; these are review cues, not categorical violations. All reports remain `review-required` and `semanticEquivalenceVerified: false`.
+The STE length screen uses 20 words for procedures and 25 for descriptions/notes. It now groups supported number/unit combinations, quoted spans, and user-declared names/titles; parentheses are one outer count unit with their contents assessed separately. List lead-ins and individual items are separate count units, with numeric work-step markers excluded. **Counts are still estimates, not the complete section 8 method**: undeclared names/labels, unsupported units, ambiguous structure and actual document formatting require review. Report sentence indices refer to these screening units, which can include parenthetical material and list items. ISO 24495-1 does not impose this application's 25-word heuristic. Reports also flag possible passives, selected tense/-ing patterns and unresolved contractions; these are review cues, not categorical violations. All reports remain `review-required` and `semanticEquivalenceVerified: false`.
 
 Audience and purpose are recorded for the plain-language process. Review prompts cover relevance, findability, understanding and usability. The software does not test the text with readers or verify the document's organization, layout or sufficiency.
 
@@ -53,6 +53,31 @@ Browser JSON exports include the report and complete reproduction settings, incl
 `--check-only` implies JSON output and requires a standards profile. Even with `--variants 3`, standards profiles return one result rather than inventing inconsistent terminology. Existing operation switches and protected terms still apply. Plain-text CLI output warns that the draft is unverified; use `--json` for the report.
 
 See the [coverage and source notes](docs/standards.html) for requirements that remain manual and links to ASD-STE100 Issue 9, ISO 24495-1:2023 and the standards organizations.
+
+### Strict release and the requirements inventory
+
+**Strict release is enabled by default in the browser standards modes.** The native CLI activates it with `--require-conformity`. A report and visible draft are still produced, but final-text copy/download is withheld when `releaseAllowed` is false. Diagnostic JSON explicitly contains an **unverified draft**; it is not a released or certified document. Turning strict release off allows ordinary draft export, not approval.
+
+The CLI returns **exit code 3** when strict release is blocked. It writes no plain-text output and does not create or truncate the requested `--output` file, even with `--json`. To inspect the diagnostic draft, use `--json` without `--output`. Shell redirection is under the caller's control; check the process exit status before using the report or treating its text as final.
+
+```sh
+# Exit 3 is expected while conformity is unverified; report goes to stdout.
+./build/synomizer --profile combined --require-conformity --json input.txt
+
+# On a blocked assessment, final.txt is not created or overwritten.
+./build/synomizer --profile ste --require-conformity --output final.txt input.txt
+
+# Keep supported lists inline instead of formatting them vertically.
+./build/synomizer --profile combined --no-structured-lists input.txt
+```
+
+**This release has no automatic approval path.** All assessments remain blocked for final-conformity release. That is deliberate: the engine cannot verify the full vocabulary/sense/grammar requirements, preserve arbitrary intended meanings by proof, or substitute for reader evaluation. This guard is a workflow safeguard, not a complete standards converter, a DRM mechanism, or a conformity guarantee. Tests establish implementation behaviour, not standards conformity.
+
+The report inventories all **53 ASD-STE100 Issue 9 rule identifiers**, each labelled `partial-screen` or `human-review`, and `attention` or `not-verified`. Rule 2.3 from an older issue is not included. For ISO 24495-1 the report provides the **four principle-level review areas**, not an exhaustive list of every guideline. Inventory completeness is distinct from implementation coverage; absence of a finding does not mark a rule passed.
+
+A narrow whole-draft rollback guard compares numeric tokens and selected negation/modality markers before and after conversion. A mismatch restores the source and adds a review finding. A matching marker set is not proof of equal meaning, scope, quantities in context, or correct grammar.
+
+The report also contains SHA-256 fingerprints of the LF-normalized source and the generated draft. These bind the report to exact text and allow independent change detection. **Hashes are not approval signatures, authority verification, or semantic-equivalence proofs.** Reader context and a pasted glossary cannot switch `conformityVerified` or `releaseAllowed` to true.
 
 ### Optional Bonsai 2 / WebGPU investigation
 

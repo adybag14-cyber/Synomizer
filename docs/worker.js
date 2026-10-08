@@ -19,7 +19,8 @@ self.onmessage = async ({ data }) => {
           protectQuotes: data.options.protectQuotes !== false, protectedTerms: [...(data.options.protectedTerms || [])],
           ...(standard ? { profile: data.options.profile, textType: data.options.textType ?? "description",
             checkOnly: data.options.checkOnly ?? false, audience: data.options.audience ?? "", purpose: data.options.purpose ?? "",
-            vocabulary: data.options.vocabulary ?? [] } : {}) } })) };
+            vocabulary: data.options.vocabulary ?? [], requireConformity: data.options.requireConformity ?? false,
+            structuredLists: data.options.structuredLists !== false } : {}) } })) };
 
     postMessage({ type: "result", id: data.id, batch });
   } catch (error) { postMessage({ type: "error", id: data.id, message: error.message || "Could not rewrite that text." }); }

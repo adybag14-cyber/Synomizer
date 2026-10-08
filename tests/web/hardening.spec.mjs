@@ -44,7 +44,7 @@ test('large ledger exports every change, not only its visible page',async({page}
   await page.locator('#export-changes').click();
   const download=await waiting;
   const report=JSON.parse(await readFile(await download.path(),'utf8'));
-  expect(report.version).toBe('1.4.1');
+  expect(report.version).toBe('1.5.0');
   expect(report.changes.length).toBeGreaterThan(250);
   expect(report.text).toBe(await page.locator('#output').textContent());
 });
@@ -52,7 +52,7 @@ test('published artifact includes the release version and asset fingerprints',as
   const response=await request.get('build.json');
   expect(response.ok()).toBeTruthy();
   const manifest=await response.json();
-  expect(manifest.version).toBe('1.4.1');
-  expect(Object.keys(manifest.sha256)).toHaveLength(12);
+  expect(manifest.version).toBe('1.5.0');
+  expect(Object.keys(manifest.sha256)).toHaveLength(14);
   for(const hash of Object.values(manifest.sha256)) expect(hash).toMatch(/^[a-f0-9]{64}$/);
 });

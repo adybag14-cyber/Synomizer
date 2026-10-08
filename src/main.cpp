@@ -55,6 +55,8 @@ Options:
       --style NAME      Single-rewrite profile: balanced, close, or recast
       --profile NAME    variation (default), ste, plain, or combined; standards give one draft
       --text-type NAME  description (default) or procedure; selects STE length screen
+      --require-conformity  Withhold text/output file and exit 3 unless conformity is established
+      --no-structured-lists  Do not format supported enumerations as vertical lists
       --check-only      No edits; output JSON review report (requires standards profile)
       --audience TEXT   Intended readers (context for human plain-language review)
       --purpose TEXT    Reader task/purpose (not a verified assessment)
@@ -97,6 +99,15 @@ std::string metrics_json(const synomizer::StandardMetrics& m) {
     ",\"longestSentence\":"+std::to_string(m.longest_sentence)+",\"longSentences\":"+std::to_string(m.long_sentences)+
     ",\"possiblePassives\":"+std::to_string(m.possible_passives)+",\"unlistedWords\":"+std::to_string(m.unlisted_words)+"}";
 }
+std::string conformity_json(const synomizer::ConformityAssessment& c) {
+  auto out="{\"decision\":"+json_string(c.decision)+",\"releaseAllowed\":false,\"conformityVerified\":false,\"strictRequested\":"+(c.strict_requested?"true":"false")+
+    ",\"sourceSha256\":"+json_string(c.source_sha256)+",\"draftSha256\":"+json_string(c.draft_sha256)+",\"normalization\":\"LF\",\"markerCheck\":"+json_string(c.marker_check)+",\"blockers\":[";
+  bool first=true;
+  for(const auto& b:c.blockers){if(!first)out+=',';first=false;out+=json_string(b);}
+  out+="],\"requirements\":[";first=true;
+  for(const auto& r:c.requirements){if(!first)out+=',';first=false;out+="{\"standard\":"+json_string(r.standard)+",\"rule\":"+json_string(r.rule)+",\"method\":"+json_string(r.method)+",\"result\":"+json_string(r.result)+",\"note\":"+json_string(r.note)+"}";}
+  return out+"]}";
+}
 std::string standards_json(const synomizer::StandardsReport& r) {
   auto out="{\"profile\":"+json_string(r.profile)+",\"textType\":"+json_string(r.text_type)+
     ",\"status\":"+json_string(r.status)+",\"audience\":"+json_string(r.audience)+",\"purpose\":"+json_string(r.purpose)+
@@ -110,7 +121,7 @@ std::string standards_json(const synomizer::StandardsReport& r) {
     out+="{\"code\":"+json_string(f.code)+",\"severity\":"+json_string(f.severity)+",\"message\":"+json_string(f.message)+
       ",\"evidence\":"+json_string(f.evidence)+",\"sentence\":"+std::to_string(f.sentence)+"}";
   }
-  return out+"]}";
+  return out+"],\"conformity\":"+conformity_json(r.conformity)+"}";
 }
 std::string to_json(const synomizer::Result& result, std::uint64_t seed, synomizer::Style style) {
   std::string out = "{\"version\":" + json_string(synomizer::version()) + ",\"seed\":" + json_string(std::to_string(seed)) +
@@ -154,6 +165,8 @@ int run(const std::vector<std::string>& args) {
         continue;
       }
       if (arg=="--check-only") { options.check_only=true; json=true; continue; }
+      if (arg=="--require-conformity") { options.require_conformity=true; continue; }
+      if (arg=="--no-structured-lists") { options.structured_lists=false; continue; }
       if (arg=="--audience") { options.audience=value(); continue; }
       if (arg=="--purpose") { options.purpose=value(); continue; }
       if (arg=="--vocabulary") { vocabulary_path=value(); if(vocabulary_path.empty()) throw std::runtime_error("vocabulary filename cannot be empty"); continue; }
@@ -254,6 +267,17 @@ int run(const std::vector<std::string>& args) {
   if (count>1 && batch.variants.size()<count && !json)
     std::cerr << "synomizer: only " << batch.variants.size() << " distinct result(s) found; protection settings were not relaxed.\n";
   if (options.profile!="variation" && !json) std::cerr << "synomizer: authoring draft; full conformance and meaning are not verified. Use --json for the review report.\n";
+  if (options.require_conformity) {
+    bool blocked=false;
+    for(const auto& v:batch.variants) if(!v.result.standards || !v.result.standards->conformity.release_allowed) blocked=true;
+    if(blocked) {
+      // Never create/truncate a requested output file on failed release.
+      // Explicit JSON on stdout is a diagnostic draft report, not released text.
+      if(json && output_path.empty()) { std::cout<<rendered; std::cout.flush(); if(!std::cout) throw std::runtime_error("report write failed"); }
+      std::cerr<<"synomizer: conformity release blocked; requirements remain unverified. No final text file was written. Use --json without --output to inspect the draft report.\n";
+      return 3;
+    }
+  }
   if (output_path.empty()) {
     std::cout << rendered;
     std::cout.flush();

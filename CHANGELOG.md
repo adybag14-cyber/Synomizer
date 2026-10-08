@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.5.0 - 2026-10-08
+
+- Add a strict standards release guard to the browser, C++ API and CLI. Incomplete assessments block final-text exports; CLI `--require-conformity` exits 3 without creating or overwriting an output file. Diagnostic JSON remains explicitly available for review. No automatic complete-conformity approval path is claimed or implemented.
+- Add a report inventory of all 53 ASD-STE100 Issue 9 rule identifiers and four ISO 24495-1 principle-level review areas, separating partial screens from manual review and never interpreting absent findings as rule approval.
+- Default browser standards modes to strict release, with an explicit unverified-draft export opt-out. Add whole-draft rollback if selected numeric, negation or modality markers change; matching markers do not establish semantic equivalence.
+- Bind reports to normalized source/draft SHA-256 fingerprints. Digests identify text; they are not approval signatures or semantic proofs.
+- Add guarded terminal-enumeration formatting with original item order, words and conjunction preserved, plus bounded positive descriptive-clause transformations. Keep prose following a formatted list outside the final bullet. Add an independent list-formatting switch and 12 directional clarity patterns.
+- Improve screening count grouping for supported measurements, quoted spans, parenthetical content, declared names/titles, numbered steps and vertical-list items. Add unresolved-semicolon and parenthetical-overflow findings. Retain explicit estimates and author-review requirements.
+- Bound malformed delimiter matching, protect strict output files on failure, and add native, independent cross-engine, and browser regression coverage. No transformer, external rewriting service or official standard dictionary is bundled.
+
 ## 1.4.1 - 2026-10-08
 
 - Keep auxiliary-led reported statements and certainty/attitude clauses attached instead of promoting their contents into independent claims. Clause splitting now requires reviewed direct state/action frames; unsupported coordinated material receives a `CLARITY-SCOPE` author-review finding.

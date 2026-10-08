@@ -307,3 +307,10 @@ button:disabled:hover { background: var(--ink); color: var(--paper); border-colo
 #standard-findings p { margin: 0.3rem 0; }
 .finding-evidence { border-left: 3px solid var(--line); padding-left: 0.6rem; }
 @media (max-width: 700px) { .standard-fields { grid-template-columns: 1fr; } }
+
+/* Reports can contain exact digests and long externally supplied text. */
+.report-binding{white-space:pre-wrap;overflow-wrap:anywhere;font-family:monospace;font-size:.8rem}
+.coverage-table{width:100%;border-collapse:collapse;font-size:.85rem;table-layout:fixed}
+.coverage-table th,.coverage-table td{padding:.5rem;text-align:left;vertical-align:top;border-bottom:1px solid currentColor;overflow-wrap:anywhere}
+.release-review{border:1px solid currentColor;padding:1rem;margin:1rem 0}
+@media(max-width:600px){.coverage-table{font-size:.7rem}.coverage-table th,.coverage-table td{padding:.25rem}.release-review{padding:.5rem}}

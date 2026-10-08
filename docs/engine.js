@@ -1379,6 +1379,7 @@ export function rewrite(input, options = {}, resources) {
     { splitPieces, freezeQuotes, freezePhrases, freezeNames, freezeTerms, lower, lowerChar, upperChar, applyCaps,
       DETERMINERS, PRONOUNS, AUX, PREPS, coordinator, subordinatorWord, knownAdverb, looksLikeVerb });
   if (options.checkOnly) throw new RangeError("check-only requires a standards profile");
+  if (options.requireConformity) throw new RangeError("require-conformity requires a standards profile");
   const settings = {
     style: options.style ?? "balanced",
     seed: options.seed ?? 1,

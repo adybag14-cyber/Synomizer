@@ -1,3 +1,5 @@
+import { standardStructure } from "./standard-structure.js";
+import { assessConformity, sourceAnchors } from "./conformity.js";
 // Copyright 2026 adybag14-cyber
 // SPDX-License-Identifier: Apache-2.0
 // Mirrors src/standards.cpp. A partial authoring aid, never a conformance certificate.
@@ -18,6 +20,8 @@ function validate(o) {
   if (!["procedure", "description"].includes(o.textType)) throw new RangeError("text type must be procedure or description");
   if (typeof o.audience !== "string" || typeof o.purpose !== "string" || bytes(o.audience) > 1000 || bytes(o.purpose) > 1000) throw new RangeError("audience and purpose must each fit in 1000 UTF-8 bytes");
   if (typeof o.checkOnly !== "boolean") throw new TypeError("checkOnly must be a boolean");
+  if (o.requireConformity !== undefined && typeof o.requireConformity !== "boolean") throw new TypeError("requireConformity must be a boolean");
+  if (o.structuredLists !== undefined && typeof o.structuredLists !== "boolean") throw new TypeError("structuredLists must be a boolean");
   if (!Array.isArray(o.vocabulary) || o.vocabulary.length > 5000) throw new RangeError("vocabulary limit is 5000 entries");
   for (const e of o.vocabulary) {
     if (!e || typeof e.term !== "string" || !trim(e.term) || bytes(e.term) > 200 || /[\t\r\n]/.test(e.term) ||
@@ -48,20 +52,74 @@ const PAST = new Map(Object.entries({ opened: "open", closed: "close", removed: 
 export function rewriteStandard(input, options, resources, h) {
   const o = { ...options, profile: options.profile, textType: options.textType ?? "description", checkOnly: options.checkOnly ?? false,
     audience: options.audience ?? "", purpose: options.purpose ?? "", vocabulary: options.vocabulary ?? [],
+    requireConformity: options.requireConformity ?? false, structuredLists: options.structuredLists ?? true,
     synonyms: options.synonyms !== false, arrange: options.arrange !== false, protectQuotes: options.protectQuotes !== false };
   validate(o);
   const { lower } = h;
   const tokenize = text => h.splitPieces(text).flatMap(p => p.sentence ? p.tokens : [{ text: p.text, word: false, frozen: false, replaced: false }]);
-  const vocabularyIndex = new Map(), spellings = new Set();
+  const vocabularyIndex = new Map(), countingNames = new Map(), spellings = new Set();
   for (const e of o.vocabulary) {
     const t = tokenize(trim(e.term)); spellings.add(lower(trim(e.term)));
+    if (["name","title"].includes(e.category) && t.length) {
+      const key=lower(t[0].text);if(!countingNames.has(key))countingNames.set(key,[]);countingNames.get(key).push(t);
+    }
     if (e.category !== "general" && t.length) {
       const key = lower(t[0].text);
       if (!vocabularyIndex.has(key)) vocabularyIndex.set(key, []);
       vocabularyIndex.get(key).push(t);
     }
   }
+  for(const patterns of countingNames.values())patterns.sort((a,b)=>b.length-a.length);
   for (const patterns of vocabularyIndex.values()) patterns.sort((a, b) => b.length - a.length);
+  const groupedCount = (t,depth=0) => {
+    const r={words:0,nested:[]};if(depth>16){r.words=count(t);return r;}
+    const parentheses=new Array(t.length).fill(t.length),quotes=new Array(t.length).fill(t.length),stack=[],closing=new Map();
+    for(let i=0;i<t.length;i++){if(t[i].text==='(')stack.push(i);else if(t[i].text===')'&&stack.length)parentheses[stack.pop()]=i;}
+    for(let i=t.length-1;i>=0;i--){const w=t[i].text,close=w==='\u201c'?'\u201d':w==='\u2018'?'\u2019':w;
+      if(['"',"'",'\u201c','\u2018'].includes(w)&&closing.has(close))quotes[i]=closing.get(close);
+      if(['"',"'",'\u201d','\u2019'].includes(w))closing.set(w,i);}
+    for(let i=0;i<t.length;i++) {
+      const w=lower(t[i].text);
+      if(w==='(') {
+        const end=parentheses[i];
+        if(end<t.length) {
+          r.words++;const inner=groupedCount(t.slice(i+1,end),depth+1);
+          if(inner.words>1)r.nested.push(inner.words);r.nested.push(...inner.nested);i=end;continue;
+        }
+      }
+      if(['"',"'",'\u201c','\u2018'].includes(w)) {
+        const end=quotes[i];
+        if(end<t.length){r.words++;i=end;continue;}
+      }
+      let named=false;
+      for(const pattern of countingNames.get(w)||[]) {
+        if(pattern.length>t.length-i)continue;
+        if(pattern.every((p,k)=>(space(p)&&space(t[i+k]))||lower(p.text)===lower(t[i+k].text))){r.words++;i+=pattern.length-1;named=true;break;}
+      }
+      if(named)continue;
+      if(/^(?=.*[0-9])[0-9]*\.?[0-9]*$/.test(w)) {
+        let next=i+1;while(next<t.length && space(t[next]))next++;
+        if(next<t.length) {
+          const unit=lower(t[next].text);
+          if(['kg','g','mg','l','ml','m','mm','cm','km','s','ms','min','h','pa','kpa','mpa','bar','psi','v','a','ma','hz','khz','mhz','ohms','ohm','kilograms','grams','milligrams','metres','meters','seconds','minutes','hours','percent','%','m/s','n-m','\u00b0c','\u00b0f'].includes(unit)){r.words++;i=next;continue;}
+          if(unit==='degrees' && next+2<t.length && space(t[next+1]) && ['celsius','fahrenheit'].includes(lower(t[next+2].text))){r.words++;i=next+2;continue;}
+        }
+      }
+      if(t[i].word||(t[i].frozen&&!space(t[i])))r.words++;
+    }
+    return r;
+  };
+  const auditUnits = text => {
+    const out=[];let pending='';
+    const flush=()=>{out.push(...h.splitPieces(pending));pending='';};
+    for(const raw of text.split('\n')) {
+      const line=trim(raw),marker=line.match(/^(?:[-*+] |[0-9]+[.)] )/);
+      if(!line)flush();
+      else if(marker){flush();out.push(...h.splitPieces(line.slice(marker[0].length)));}
+      else {if(pending)pending+='\n';pending+=line;}
+    }
+    flush();return out;
+  };
   const prepare = t => {
     for (const token of t) for (const rule of resources.clarityRules || [])
       if (rule.guard === "contraction" && rule.source.length === 1 && lower(token.text) === rule.source[0]) token.frozen = false;
@@ -167,6 +225,44 @@ export function rewriteStandard(input, options, resources, h) {
     const text = left + ". " + tail;
     return { tokens: tokenize(text), change: { kind: "arrangement", before: concat(t), after: text, detail: "Clarity: separated two explicit independent clauses" } };
   };
+  const verticalList = t => {
+    if (!o.structuredLists || t.length>600 || t.at(-1)?.text!=='.')return null;
+    for(const token of t) {
+      const w=lower(token.text);
+      if(w.includes('\n') || ['not','no','never','only','either','neither','nor','if','unless','except','excluding','when','whenever','before','after','until'].includes(w) || w.includes("n't"))return null;
+      if(!token.word && !space(token) && ![',','.'].includes(w))return null;
+    }
+    const p=positions(t);let start=t.length;
+    for(let i=1;i+1<p.length;i++) {
+      const word=lower(t[p[i]].text);
+      if(['includes','combines','comprises'].includes(word)) {if(start!==t.length)return null;start=p[i]+1;}
+      if(['control','consists'].includes(word) && lower(t[p[i+1]].text)==='of') {if(start!==t.length)return null;start=p[i+1]+1;}
+    }
+    if(start>=t.length)return null;while(start<t.length && space(t[start]))start++;
+    const objectStart=start,items=[];let conjunction=t.length;
+    for(let i=start;i+1<t.length;i++) {
+      const w=lower(t[i].text);
+      if(['and','or'].includes(w)){if(conjunction!==t.length)return null;conjunction=i;}
+      if(t[i].text===',') {
+        if(conjunction!==t.length)return null;
+        items.push(t.slice(start,i+1));start=i+1;while(start<t.length && space(t[start]))start++;
+      }
+    }
+    if(!items.length || conjunction===t.length || conjunction<start || items.length>10)return null;
+    if(conjunction>start)items.push(t.slice(start,conjunction));
+    items.push(t.slice(conjunction));if(items.length<3 || items.length>12)return null;
+    if(positions(items.at(-1)).length>2 && items.slice(0,-1).some(item=>positions(item).length===1))return null;
+    for(let n=0;n<items.length;n++) {
+      const words=positions(items[n]),offset=n+1===items.length?1:0;
+      if(words.length<=offset || words.length-offset>8)return null;
+      for(let k=offset;k<words.length;k++) {
+        const w=lower(items[n][words[k]].text);
+        if(h.AUX.has(w)||h.PRONOUNS.has(w)||h.subordinatorWord(w)||h.looksLikeVerb(resources,w))return null;
+      }
+    }
+    const text=trim(concat(t.slice(0,objectStart)))+':'+items.map(item=>'\n- '+trim(concat(item))).join('');
+    return {tokens:tokenize(text),change:{kind:'arrangement',before:concat(t),after:text,detail:'Clarity: formatted a terminal enumeration; original words and conjunction retained'}};
+  };
   const simplify = (original, changes) => {
     const out = [];
     const purposeBlocked = original.some(x => ["put", "set", "get", "got", "keep", "kept", "bring", "brought", "arrange", "arranged"].includes(lower(x.text)));
@@ -201,15 +297,22 @@ export function rewriteStandard(input, options, resources, h) {
     const metrics = { sentences: 0, words: 0, longestSentence: 0, longSentences: 0, possiblePassives: 0, unlistedWords: 0 };
     const unknown = new Set();
     const add = (code, severity, message, excerpt, sentence) => { if (findings && findings.length < 250) findings.push({ code, severity, message, evidence: excerpt, sentence }); };
-    for (const piece of h.splitPieces(text)) {
+    for (const piece of auditUnits(text)) {
       if (!piece.sentence) continue;
-      const t = piece.tokens.map(x => ({ ...x })), n = count(t); if (!n) continue;
+      const t = piece.tokens.map(x => ({ ...x })), grouping=groupedCount(t), n = STE(o)?grouping.words:count(t); if (!n) continue;
       metrics.sentences++; metrics.words += n; metrics.longestSentence = Math.max(metrics.longestSentence, n);
       const p = positions(t), note = p.length && lower(t[p[0]].text) === "note";
       const limit = STE(o) && o.textType === "procedure" && !note ? 20 : 25;
       if (n > limit) {
         metrics.longSentences++;
         add(STE(o) ? (limit === 20 ? "STE-5.1" : "STE-6.3") : "PL-SENTENCE", "review", `${n} screening words exceed the ${limit}-word target. Review grouping and sentence structure.`, evidence(t), metrics.sentences);
+      }
+      if(STE(o)) {
+        for(const inner of grouping.nested){
+          metrics.sentences++;metrics.words+=inner;metrics.longestSentence=Math.max(metrics.longestSentence,inner);
+          if(inner>limit){metrics.longSentences++;add("STE-8.5","review","A parenthetical count unit exceeds the selected target. Review both the parenthetical text and its containing sentence.",evidence(t),metrics.sentences);}
+        }
+        if(t.some(x=>x.text===';'))add("STE-8.1","review","A semicolon remains. Resolve the relationship between clauses before replacing it with separate sentences.",evidence(t),metrics.sentences);
       }
       if (passive(t)) {
         metrics.possiblePassives++;
@@ -247,24 +350,35 @@ export function rewriteStandard(input, options, resources, h) {
     return metrics;
   };
   const source = input.replace(/\r\n?/g, "\n"), result = { text: "", changes: [], parts: [] };
+  let listFinished=false;
   for (const piece of h.splitPieces(source)) {
-    if (!piece.sentence) { result.text += piece.text; if (piece.text) result.parts.push({ text: piece.text, changed: false }); continue; }
+    if (!piece.sentence) {
+      let text=piece.text;
+      if(listFinished && !text.includes("\n\n")) {
+        text="\n\n";result.changes.push({kind:"arrangement",before:piece.text,after:text,detail:"Clarity: separated a formatted list from the next text block"});
+      }
+      result.text+=text;if(text)result.parts.push({text,changed:false});listFinished=false;continue;
+    }
+    let listFormatted=false;
     let tokens = piece.tokens.map(t => ({ ...t })); prepare(tokens);
     const locked = h.freezeTerms(tokens, o.protectedTerms || []);
     if (!o.checkOnly) {
       if (o.arrange && !locked) {
-        const arranged = activePast(tokens) || splitIndependent(tokens);
-        if (arranged) { tokens = arranged.tokens; result.changes.push(arranged.change); prepare(tokens); }
+        const arranged = verticalList(tokens) || activePast(tokens) || splitIndependent(tokens) || standardStructure(tokens, resources, h);
+        if (arranged) { listFormatted=arranged.change.detail==='Clarity: formatted a terminal enumeration; original words and conjunction retained';tokens = arranged.tokens; result.changes.push(arranged.change); prepare(tokens); }
       }
       if (o.synonyms) tokens = simplify(tokens, result.changes);
     }
-    result.text += concat(tokens);
+    result.text += concat(tokens);listFinished=listFormatted;
     for (const token of tokens) result.parts.push({ text: token.text, changed: token.replaced });
   }
+  const markerMismatch=JSON.stringify(sourceAnchors(source))!==JSON.stringify(sourceAnchors(result.text));
+  if(markerMismatch){result.text=source;result.changes=[];result.parts=[{text:source,changed:false}];}
   const report = { profile: o.profile, textType: o.textType, status: "review-required", audience: o.audience, purpose: o.purpose,
     sentenceTarget: STE(o) && o.textType === "procedure" ? 20 : 25, vocabularyEntries: o.vocabulary.length,
     estimatedCounts: true, semanticEquivalenceVerified: false, findings: [] };
   const add = (code, message) => report.findings.push({ code, severity: "review", message, evidence: "", sentence: 0 });
+  if(markerMismatch)add("CONVERSION-ROLLBACK","A numeric or selected negation/modality marker changed. The whole draft was restored to the normalized source. This check does not verify full meaning or clause scope.");
   add("AUTHOR-REVIEW", "No complete conformance or semantic-equivalence assessment was performed. Check facts, actors, quantities, conditions, negation and obligations against the source.");
   add("COUNT-SCOPE", "Word counts are screening estimates, not the full ASD-STE100 section 8 counting method. Review names, labels, quotations, measurements, parentheses and lists. ISO 24495-1 does not impose this application's 25-word heuristic.");
   if (STE(o)) {
@@ -280,5 +394,6 @@ export function rewriteStandard(input, options, resources, h) {
   report.before = audit(source); report.after = audit(result.text, report.findings);
   if (report.findings.length === 250) report.findings.push({ code: "REPORT-LIMIT", severity: "review", message: "The on-screen/exported finding list is capped at 250 entries. Metrics cover the complete input; review the full document.", evidence: "", sentence: 0 });
   result.standards = report;
+  assessConformity(source, o, result);
   return result;
 }

@@ -200,6 +200,7 @@ struct ArrangeOutcome {
 };
 
 [[nodiscard]] std::optional<ArrangeOutcome> arrange_sentence(const std::vector<Token>& tokens, bool enabled, bool extended = false, std::uint64_t seed = 1);
+[[nodiscard]] std::optional<ArrangeOutcome> standard_structure(const std::vector<Token>& tokens);
 void vary_phrases(std::vector<Token>& tokens, const Options& options, std::vector<Change>& changes);
 void protect_remaining_phrases(std::vector<Token>& tokens);
 void academic_phrases(std::vector<Token>& tokens, const Options& options, std::vector<Change>& changes);
@@ -221,6 +222,9 @@ struct SubstituteOutcome {
 [[nodiscard]] std::vector<Change> rephrase(std::vector<Token>& tokens,
     const Options& options, std::uint64_t ordinal);
 [[nodiscard]] Result rewrite_standard(std::string_view input, const Options& options);
+[[nodiscard]] std::string sha256_text(std::string_view text);
+[[nodiscard]] std::vector<std::string> source_anchors(std::string_view text);
+void assess_conformity(std::string_view source, const Options& options, Result& result);
 void fix_articles(std::vector<Token>& tokens, std::vector<Change>& changes);
 
 [[nodiscard]] std::string concat_tokens(const std::vector<Token>& tokens);

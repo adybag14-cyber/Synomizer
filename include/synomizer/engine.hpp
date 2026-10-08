@@ -39,6 +39,18 @@ struct StandardMetrics {
   std::size_t sentences = 0, words = 0, longest_sentence = 0, long_sentences = 0;
   std::size_t possible_passives = 0, unlisted_words = 0;
 };
+struct RuleAssessment {
+  std::string standard, rule, method, result, note;
+};
+struct ConformityAssessment {
+  std::string decision = "blocked";
+  bool release_allowed = false, conformity_verified = false, strict_requested = false;
+  std::string source_sha256, draft_sha256;
+  std::string marker_check = "not-checked"; // Selected numeric/logical tokens only.
+  std::vector<std::string> blockers;
+  // A rule identifier inventory is not evidence that a rule was verified.
+  std::vector<RuleAssessment> requirements;
+};
 struct StandardsReport {
   std::string profile, text_type, status = "review-required", audience, purpose;
   std::size_t sentence_target = 25, vocabulary_entries = 0;
@@ -46,6 +58,7 @@ struct StandardsReport {
   bool estimated_counts = true, semantic_equivalence_verified = false;
   StandardMetrics before, after;
   std::vector<StandardFinding> findings;
+  ConformityAssessment conformity;
 };
 [[nodiscard]] std::vector<VocabularyEntry> parse_vocabulary(std::string_view tsv);
 
@@ -68,6 +81,8 @@ struct Options {
   bool check_only = false;
   std::string audience = {}, purpose = {};
   std::vector<VocabularyEntry> vocabulary = {};
+  bool require_conformity = false; // Withhold release when complete assessment is unavailable.
+  bool structured_lists = true; // Preserve conjunctions while formatting supported enumerations.
 };
 
 struct Result {

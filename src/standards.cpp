@@ -72,12 +72,15 @@ void validate(const Options& o) {
 struct Vocabulary {
   std::unordered_map<std::string,std::vector<Tokens>> protected_index;
   std::unordered_set<std::string> spellings;
+  std::unordered_map<std::string,std::vector<Tokens>> counting_names;
   explicit Vocabulary(const Options& options) {
     for(const auto& e:options.vocabulary) {
       auto t=tokenize(trim(e.term));
       spellings.insert(lower_copy(trim(e.term)));
+      if((e.category=="name" || e.category=="title") && !t.empty()) counting_names[lower_copy(t.front().text)].push_back(t);
       if(e.category!="general" && !t.empty()) protected_index[lower_copy(t.front().text)].push_back(std::move(t));
     }
+    for(auto& [key,patterns]:counting_names) { (void)key; std::stable_sort(patterns.begin(),patterns.end(),[](const auto& a,const auto& b){return a.size()>b.size();}); }
     for(auto& [key,patterns]:protected_index) {
       (void)key;
       std::stable_sort(patterns.begin(),patterns.end(),[](const auto& a,const auto& b){return a.size()>b.size();});
@@ -97,6 +100,85 @@ struct Vocabulary {
     }
   }
 };
+struct GroupedCount {std::size_t words=0;std::vector<std::size_t> nested;};
+bool decimal_number(std::string_view word) {
+  if(word.empty())return false;
+  bool digit=false,point=false;
+  for(unsigned char c:word) {
+    if(c>='0' && c<='9'){digit=true;continue;}
+    if(c=='.' && !point){point=true;continue;}
+    return false;
+  }
+  return digit;
+}
+GroupedCount grouped_count(const Tokens& t,const Vocabulary& v,int depth=0) {
+  GroupedCount r;
+  if(depth>16){r.words=count(t);return r;}
+  std::vector<std::size_t> parentheses(t.size(),t.size()),quotes(t.size(),t.size()),stack;
+  std::unordered_map<std::string,std::size_t> closing;
+  for(std::size_t i=0;i<t.size();++i){if(t[i].text=="(")stack.push_back(i);else if(t[i].text==")" && !stack.empty()){parentheses[stack.back()]=i;stack.pop_back();}}
+  for(std::size_t i=t.size();i>0;) {
+    --i;const auto& w=t[i].text;
+    const std::string close=w=="\xE2\x80\x9C"?"\xE2\x80\x9D":w=="\xE2\x80\x98"?"\xE2\x80\x99":w;
+    if(in(w,{"\"","'","\xE2\x80\x9C","\xE2\x80\x98"}))if(const auto j=closing.find(close);j!=closing.end())quotes[i]=j->second;
+    if(in(w,{"\"","'","\xE2\x80\x9D","\xE2\x80\x99"}))closing[w]=i;
+  }
+  for(std::size_t i=0;i<t.size();++i) {
+    const auto w=lower_copy(t[i].text);
+    if(w=="(") {
+      const auto end=parentheses[i];
+      if(end<t.size()) {
+        ++r.words;const auto inner=grouped_count(Tokens(t.begin()+static_cast<std::ptrdiff_t>(i+1),t.begin()+static_cast<std::ptrdiff_t>(end)),v,depth+1);
+        if(inner.words>1)r.nested.push_back(inner.words);
+        r.nested.insert(r.nested.end(),inner.nested.begin(),inner.nested.end());i=end;continue;
+      }
+    }
+    if(in(w,{"\"","'","\xE2\x80\x9C","\xE2\x80\x98"})) {
+      const auto end=quotes[i];
+      if(end<t.size()){++r.words;i=end;continue;}
+    }
+    bool named=false;
+    if(const auto found=v.counting_names.find(w);found!=v.counting_names.end()) {
+      for(const auto& pattern:found->second) {
+        if(pattern.size()>t.size()-i)continue;
+        bool match=true;
+        for(std::size_t k=0;k<pattern.size();++k)if(!(space(pattern[k])&&space(t[i+k])) && lower_copy(pattern[k].text)!=lower_copy(t[i+k].text)){match=false;break;}
+        if(match){++r.words;i+=pattern.size()-1;named=true;break;}
+      }
+    }
+    if(named)continue;
+    if(decimal_number(w)) {
+      auto next=i+1;while(next<t.size() && space(t[next]))++next;
+      if(next<t.size()) {
+        const auto unit=lower_copy(t[next].text);
+        if(in(unit,{"kg","g","mg","l","ml","m","mm","cm","km","s","ms","min","h","pa","kpa","mpa","bar","psi","v","a","ma","hz","khz","mhz","ohms","ohm","kilograms","grams","milligrams","metres","meters","seconds","minutes","hours","percent","%","m/s","n-m","\xC2\xB0" "c","\xC2\xB0" "f"})) {++r.words;i=next;continue;}
+        if(unit=="degrees" && next+2<t.size() && space(t[next+1]) && in(lower_copy(t[next+2].text),{"celsius","fahrenheit"})) {++r.words;i=next+2;continue;}
+      }
+    }
+    if(t[i].word || (t[i].frozen && !space(t[i])))++r.words;
+  }
+  return r;
+}
+std::vector<Piece> audit_units(std::string_view text) {
+  std::vector<Piece> out;std::string pending;
+  const auto flush=[&]{for(auto& p:split_pieces(pending))out.push_back(std::move(p));pending.clear();};
+  std::size_t begin=0;
+  while(begin<text.size()) {
+    auto end=text.find('\n',begin);if(end==std::string_view::npos)end=text.size();
+    auto line=trim(std::string(text.substr(begin,end-begin)));std::size_t marker=0;
+    if(line.size()>2 && in(line.substr(0,1),{"-","*","+"}) && line[1]==' ')marker=2;
+    else {
+      std::size_t n=0;while(n<line.size() && line[n]>='0' && line[n]<='9')++n;
+      if(n && n+1<line.size() && (line[n]=='.'||line[n]==')') && line[n+1]==' ')marker=n+2;
+    }
+    if(line.empty()){flush();}
+    else if(marker){flush();for(auto& p:split_pieces(line.substr(marker)))out.push_back(std::move(p));}
+    else {if(!pending.empty())pending+='\n';pending+=line;}
+    begin=end==text.size()?end:end+1;
+  }
+  flush();return out;
+}
+
 void prepare(Tokens& t,const Options& o,const Vocabulary& vocabulary) {
   // Scanner freezes apostrophes. Unfreeze only explicit unambiguous contractions,
   // then restore quotation, name, fixed-expression and user protection.
@@ -223,6 +305,55 @@ std::optional<ArrangeOutcome> split_independent(const Tokens& t) {
   auto text=left+". "+tail;
   return ArrangeOutcome{tokenize(text),{ChangeKind::Arrangement,concat_tokens(t),text,"Clarity: separated two explicit independent clauses"}};
 }
+std::optional<ArrangeOutcome> vertical_list(const Tokens& t,const Options& o) {
+  if(!o.structured_lists || t.size()>600 || t.empty() || t.back().text!=".") return std::nullopt;
+  for(const auto& token:t) {
+    const auto w=lower_copy(token.text);
+    if(w.find('\n')!=std::string::npos || in(w,{"not","no","never","only","either","neither","nor","if","unless","except","excluding","when","whenever","before","after","until"}) || w.find("n't")!=std::string::npos) return std::nullopt;
+    if(!token.word && !space(token) && !in(w,{",","."})) return std::nullopt;
+  }
+  const auto p=positions(t);
+  std::size_t start=t.size();
+  for(std::size_t i=1;i+1<p.size();++i) {
+    const auto word=lower_copy(t[p[i]].text);
+    if(in(word,{"includes","combines","comprises"})) { if(start!=t.size()) return std::nullopt; start=p[i]+1; }
+    if(in(word,{"control","consists"}) && lower_copy(t[p[i+1]].text)=="of") { if(start!=t.size()) return std::nullopt; start=p[i+1]+1; }
+  }
+  if(start>=t.size()) return std::nullopt;
+  while(start<t.size() && space(t[start])) ++start;
+  const auto object_start=start;
+  std::vector<Tokens> items;std::size_t conjunction=t.size();
+  for(std::size_t i=start;i+1<t.size();++i) {
+    const auto w=lower_copy(t[i].text);
+    if(in(w,{"and","or"})) {if(conjunction!=t.size())return std::nullopt;conjunction=i;}
+    if(t[i].text==",") {
+      if(conjunction!=t.size())return std::nullopt;
+      items.emplace_back(t.begin()+static_cast<std::ptrdiff_t>(start),t.begin()+static_cast<std::ptrdiff_t>(i+1));
+      start=i+1;while(start<t.size() && space(t[start]))++start;
+    }
+  }
+  if(items.empty() || conjunction==t.size() || conjunction<start || items.size()>10) return std::nullopt;
+  // Retain the actual conjunction and all comma punctuation. In particular,
+  // alternatives (or) must never become requirements to perform every item.
+  if(conjunction>start) items.emplace_back(t.begin()+static_cast<std::ptrdiff_t>(start),t.begin()+static_cast<std::ptrdiff_t>(conjunction));
+  items.emplace_back(t.begin()+static_cast<std::ptrdiff_t>(conjunction),t.end());
+  if(items.size()<3 || items.size()>12)return std::nullopt;
+  // A final shared head can belong to earlier items: "red, blue and green
+  // lamps" is not three independently named objects. Do not guess the head.
+  if(positions(items.back()).size()>2 && std::ranges::any_of(items.begin(),items.end()-1,[](const auto& item){return positions(item).size()==1;})) return std::nullopt;
+  for(std::size_t n=0;n<items.size();++n) {
+    auto words=positions(items[n]);const auto offset=n+1==items.size()?1u:0u;
+    if(words.size()<=offset || words.size()-offset>8)return std::nullopt;
+    for(std::size_t k=offset;k<words.size();++k) {
+      const auto w=lower_copy(items[n][words[k]].text);
+      if(is_aux(w) || is_pronoun(w) || is_subordinator_word(w) || looks_like_verb_token(w))return std::nullopt;
+    }
+  }
+  std::string out=trim(concat_tokens(Tokens(t.begin(),t.begin()+static_cast<std::ptrdiff_t>(object_start))))+":";
+  for(const auto& item:items)out+="\n- "+trim(concat_tokens(item));
+  return ArrangeOutcome{tokenize(out),{ChangeKind::Arrangement,concat_tokens(t),out,"Clarity: formatted a terminal enumeration; original words and conjunction retained"}};
+}
+
 void simplify(Tokens& t,std::vector<Change>& changes) {
   const auto original=t; Tokens out; out.reserve(t.size());
   const bool purpose_blocked=std::ranges::any_of(original,[](const auto& x){return in(lower_copy(x.text),{"put","set","get","got","keep","kept","bring","brought","arrange","arranged"});});
@@ -261,9 +392,9 @@ StandardMetrics audit(std::string_view text,const Options& o,const Vocabulary& v
   const auto add=[&](std::string code,std::string severity,std::string message,std::string excerpt,std::size_t sentence) {
     if(findings && findings->size()<250) findings->push_back({std::move(code),std::move(severity),std::move(message),std::move(excerpt),sentence});
   };
-  for(auto& piece:split_pieces(text)) {
+  for(auto& piece:audit_units(text)) {
     if(!piece.sentence) continue;
-    auto tokens=piece.tokens; const auto n=count(tokens); if(!n) continue;
+    auto tokens=piece.tokens; const auto grouping=grouped_count(tokens,vocabulary); const auto n=ste(o)?grouping.words:count(tokens); if(!n) continue;
     ++metrics.sentences; metrics.words+=n;metrics.longest_sentence=std::max(metrics.longest_sentence,n);
     const auto p=positions(tokens);
     const bool note=!p.empty() && lower_copy(tokens[p[0]].text)=="note";
@@ -271,6 +402,13 @@ StandardMetrics audit(std::string_view text,const Options& o,const Vocabulary& v
     if(n>limit) {
       ++metrics.long_sentences;
       add(ste(o)?(limit==20?"STE-5.1":"STE-6.3"):"PL-SENTENCE","review",std::to_string(n)+" screening words exceed the "+std::to_string(limit)+"-word target. Review grouping and sentence structure.",evidence(tokens),metrics.sentences);
+    }
+    if(ste(o)) {
+      for(const auto inner:grouping.nested) {
+        ++metrics.sentences;metrics.words+=inner;metrics.longest_sentence=std::max(metrics.longest_sentence,inner);
+        if(inner>limit){++metrics.long_sentences;add("STE-8.5","review","A parenthetical count unit exceeds the selected target. Review both the parenthetical text and its containing sentence.",evidence(tokens),metrics.sentences);}
+      }
+      if(std::ranges::any_of(tokens,[](const auto& x){return x.text==";";}))add("STE-8.1","review","A semicolon remains. Resolve the relationship between clauses before replacing it with separate sentences.",evidence(tokens),metrics.sentences);
     }
     if(possible_passive(tokens)) {
       ++metrics.possible_passives;
@@ -334,31 +472,44 @@ Result rewrite_standard(std::string_view input,const Options& options) {
   validate(options);
   const Vocabulary vocabulary(options);
   const auto source=normalized(input);
-  Result result;
+  Result result;bool list_finished=false;
   for(auto& piece:split_pieces(source)) {
-    if(!piece.sentence) {result.text+=piece.text;continue;}
+    if(!piece.sentence) {
+      if(list_finished && piece.text.find("\n\n")==std::string::npos) {
+        result.text+="\n\n";
+        result.changes.push_back({ChangeKind::Arrangement,piece.text,"\n\n","Clarity: separated a formatted list from the next text block"});
+      } else result.text+=piece.text;
+      list_finished=false;continue;
+    }
+    bool list_formatted=false;
     auto tokens=piece.tokens;
     prepare(tokens,options,vocabulary);
     const bool locked=freeze_terms(tokens,options.protected_terms);
     if(!options.check_only) {
       if(options.arrange && !locked) {
-        auto arranged=active_past(tokens);
+        auto arranged=vertical_list(tokens,options);
+        if(!arranged) arranged=active_past(tokens);
         if(!arranged) arranged=split_independent(tokens);
+        if(!arranged) arranged=standard_structure(tokens);
         if(arranged) {
+          list_formatted=arranged->change.detail=="Clarity: formatted a terminal enumeration; original words and conjunction retained";
           tokens=std::move(arranged->tokens);result.changes.push_back(std::move(arranged->change));
           prepare(tokens,options,vocabulary);
         }
       }
       if(options.synonyms) simplify(tokens,result.changes);
     }
-    result.text+=concat_tokens(tokens);
+    result.text+=concat_tokens(tokens);list_finished=list_formatted;
   }
+  const bool marker_mismatch=source_anchors(source)!=source_anchors(result.text);
+  if(marker_mismatch) {result.text=source;result.changes.clear();}
   StandardsReport report;
   report.profile=options.profile;report.text_type=options.text_type;
   report.audience=options.audience;report.purpose=options.purpose;
   report.sentence_target=ste(options) && options.text_type=="procedure" ? 20 : 25;
   report.vocabulary_entries=options.vocabulary.size();
   const auto add=[&](std::string code,std::string message) {report.findings.push_back({std::move(code),"review",std::move(message),"",0});};
+  if(marker_mismatch)add("CONVERSION-ROLLBACK","A numeric or selected negation/modality marker changed. The whole draft was restored to the normalized source. This check does not verify full meaning or clause scope.");
   add("AUTHOR-REVIEW","No complete conformance or semantic-equivalence assessment was performed. Check facts, actors, quantities, conditions, negation and obligations against the source.");
   add("COUNT-SCOPE","Word counts are screening estimates, not the full ASD-STE100 section 8 counting method. Review names, labels, quotations, measurements, parentheses and lists. ISO 24495-1 does not impose this application's 25-word heuristic.");
   if(ste(options)) {
@@ -375,6 +526,7 @@ Result rewrite_standard(std::string_view input,const Options& options) {
   report.after=audit(result.text,options,vocabulary,&report.findings);
   if(report.findings.size()==250) report.findings.push_back({"REPORT-LIMIT","review","The on-screen/exported finding list is capped at 250 entries. Metrics cover the complete input; review the full document.","",0});
   result.standards=std::move(report);
+  assess_conformity(source,options,result);
   return result;
 }
 } // namespace synomizer
