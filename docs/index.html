@@ -20,6 +20,14 @@
 
   <main>
     <form class="tools" id="tools">
+      <label>Writing mode
+        <select id="profile" name="profile">
+          <option value="variation">Three variations</option>
+          <option value="ste">ASD-STE100 authoring aid</option>
+          <option value="plain">ISO 24495-1 plain-language aid</option>
+          <option value="combined">STE + plain-language aid</option>
+        </select>
+      </label>
       <label>Seed <input id="seed" name="seed" type="text" inputmode="numeric" value="1" autocomplete="off" spellcheck="false"></label>
       <label>Intensity
         <select id="intensity" name="intensity" title="Vocabulary breadth, not a minimum number of changes. Use Restructured for eligible sentence-level variations.">
@@ -28,7 +36,7 @@
           <option value="2">2 · also narrower words</option>
         </select>
       </label>
-      <label class="check"><input id="synonyms" type="checkbox" checked> Synonyms</label>
+      <label class="check"><input id="synonyms" type="checkbox" checked> <span id="word-operation-label">Synonyms</span></label>
       <label class="check"><input id="arrange" type="checkbox" checked> Sentence moves</label>
       <label class="check"><input id="quotes" type="checkbox" checked> Keep quotations</label>
       <button type="submit" id="rewrite">Create 3 variations</button>
@@ -42,6 +50,25 @@
       <button type="button" id="retry" hidden>Retry loading</button>
       <button type="button" id="reset">Sample</button>
     </form>
+    <fieldset id="standard-options" class="standard-options" hidden>
+      <legend>Standards-oriented drafting, without a language model</legend>
+      <p>These profiles produce one consistent draft, not random alternatives. They apply a limited set of clarity edits and report review items. They do not certify conformity or verify the meaning.</p>
+      <div class="standard-fields">
+        <label for="text-type">Text type
+          <select id="text-type"><option value="description">Description or explanation</option><option value="procedure">Procedure or instructions</option></select>
+        </label>
+        <label class="check"><input type="checkbox" id="check-only"> Check only: keep the text unchanged</label>
+        <label for="audience">Intended readers <input id="audience" type="text" placeholder="For example: newly trained maintenance staff" maxlength="500"></label>
+        <label for="purpose">What do readers need to do? <input id="purpose" type="text" placeholder="For example: identify the required inspection" maxlength="500"></label>
+      </div>
+      <label for="vocabulary">User-authorized vocabulary (optional TSV)</label>
+      <textarea id="vocabulary" rows="3" spellcheck="false" aria-describedby="vocabulary-help" placeholder="term [tab] part of speech [tab] intended meaning [tab] category"></textarea>
+      <p id="vocabulary-help">Four tab-separated columns: term, part of speech, meaning, category. Categories: general, technical-noun, technical-verb, name, title. Technical terms, names and titles are protected. General entries permit spelling screening only, not sense or grammatical approval. Do not paste data you are not authorized to use. Up to 5,000 entries.</p>
+      <button id="import-vocabulary" type="button" class="secondary">Import vocabulary .tsv</button>
+      <input id="vocabulary-file" type="file" accept=".tsv,text/tab-separated-values,text/plain" hidden aria-label="Import authorized vocabulary">
+      <p id="vocabulary-status" class="hint" role="status">No official STE dictionary is bundled. Imported data stays in this page's memory and appears in exported reproduction settings.</p>
+      <p><a href="standards.html">Coverage, limitations, standards sources and optional Bonsai 2 / WebGPU research</a></p>
+    </fieldset>
     <details class="advanced">
       <summary>Protect names or specialist terms</summary>
       <label for="protected">Keep these words or phrases unchanged (one per line)</label>
@@ -59,7 +86,7 @@
     <section class="comparison" aria-labelledby="variations-heading">
       <div class="sheet-head"><h2 id="variations-heading">One original. Three possibilities.</h2></div>
       <p id="variation-summary" class="hint" aria-live="polite"></p>
-      <p class="hint">Balanced, light-touch and restructured profiles respect your intensity and protected terms. These are editing approaches, not quality rankings. Review the meaning before choosing.</p>
+      <p class="hint" id="variation-guidance">Balanced, light-touch and restructured profiles respect your intensity and protected terms. These are editing approaches, not quality rankings. Review the meaning before choosing.</p>
       <div id="variations" class="variation-grid" data-count="1" role="radiogroup" aria-labelledby="variations-heading">
         <article class="variant-card is-selected" data-index="0" aria-labelledby="variant-title-1">
           <div class="variant-head"><h3 id="variant-title-1">Variation 1</h3>
@@ -105,6 +132,14 @@
         <p class="hint">Includes the original, all results, their exact options and complete change logs.</p></div>
     </section>
 
+    <section id="standards-report" class="standards-report" aria-labelledby="standards-heading" hidden>
+      <div class="sheet-head"><h2 id="standards-heading">Author review required</h2></div>
+      <p id="standards-summary" role="status"></p>
+      <p id="standards-metrics"></p>
+      <ol id="standard-findings"></ol>
+      <p class="hint">The JSON change log includes these findings and before/after screening metrics. A report is not a conformity certificate. Review the current authorized standard, vocabulary and reader needs.</p>
+    </section>
+
     <section class="ledger">
       <div class="sheet-head">
         <h2 id="ledger-heading" tabindex="-1">Change ledger</h2>
@@ -119,7 +154,7 @@
 
   <footer class="colophon">
     <p>Review before using. Mechanical rewriting cannot guarantee identical meaning or perfect grammar. The C++23 command-line tool is the reference. This page runs the same rules in the browser. It is not a language model, and it does not claim a perfect paraphrase: metaphor, register, and the emphasis of a moved clause can still shift.</p>
-    <p>Version 1.3.0 · Apache-2.0 · Text and settings stay in memory and are not saved after a reload. This site uses no third-party fonts, analytics, or rewriting services.</p>
+    <p>Version 1.4.0 · Apache-2.0 · Text and settings stay in memory and are not saved after a reload. This site uses no third-party fonts, analytics, or rewriting services.</p>
     <p><a href="https://github.com/adybag14-cyber/Synomizer">adybag14-cyber/Synomizer</a></p>
   </footer>
   <noscript><p class="banner">Synomizer needs JavaScript for the live rewrite.</p></noscript>

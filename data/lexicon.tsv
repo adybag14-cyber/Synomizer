@@ -313,3 +313,33 @@ usage	noun	use	free
 @academic	local	the present analysis|this analysis	1
 @academic	local	as compared with|in comparison with	1
 @academic	local	with respect to|in relation to	1
+
+# Original, directional clarity edits; NOT the ASD dictionary or an ISO word list.
+# @clarity, source phrase, replacement, local grammatical guard
+@clarity	in order to	to	purpose
+@clarity	due to the fact that	because	clause
+@clarity	in the event that	if	clause
+@clarity	prior to	before	noun
+@clarity	subsequent to	after	noun
+@clarity	at the present time	now	any
+@clarity	on a daily basis	each day	any
+@clarity	on a weekly basis	each week	any
+@clarity	in close proximity to	near	noun
+@clarity	utilize	use	verb
+@clarity	utilise	use	verb
+@clarity	utilizes	uses	verb
+@clarity	utilises	uses	verb
+@clarity	utilized	used	verb
+@clarity	utilised	used	verb
+@clarity	don't	do not	contraction
+@clarity	doesn't	does not	contraction
+@clarity	didn't	did not	contraction
+@clarity	can't	cannot	contraction
+@clarity	won't	will not	contraction
+@clarity	isn't	is not	contraction
+@clarity	aren't	are not	contraction
+@clarity	wasn't	was not	contraction
+@clarity	weren't	were not	contraction
+@clarity	shouldn't	should not	contraction
+@clarity	couldn't	could not	contraction
+@clarity	mustn't	must not	contraction

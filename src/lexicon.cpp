@@ -85,6 +85,10 @@ void load_line(Lexicon& lex, std::string_view line) {
       lex.academic_rules.push_back({cols[1], split_char(cols[2], '|'), cols[3] == "2" ? 2 : 1});
     return;
   }
+  if (cols[0] == "@clarity") {
+    lex.clarity_rules.push_back({split_char(cols[1], ' '), cols[2], flag});
+    return;
+  }
   if (cols[0] == "@phrase") {
     lex.phrase_rules.push_back({cols[1], split_char(cols[2], '|')});
     return;

@@ -151,6 +151,8 @@ class Lexicon {
   [[nodiscard]] const std::vector<std::vector<std::string>>& phrases_starting(std::string_view first, bool allow_variation) const;
   struct PhraseRule { std::string mode; std::vector<std::string> forms; };
   std::vector<PhraseRule> phrase_rules;
+  struct ClarityRule { std::vector<std::string> source; std::string target, guard; };
+  std::vector<ClarityRule> clarity_rules;
   struct AcademicRule { std::string mode; std::vector<std::string> forms; int minimum_intensity = 1; };
   std::vector<AcademicRule> academic_rules;
 
@@ -205,7 +207,7 @@ void academic_phrases(std::vector<Token>& tokens, const Options& options, std::v
 
 [[nodiscard]] bool freeze_terms(std::vector<Token>& tokens, const std::vector<std::string>& terms);
 
-void freeze_tokens(std::vector<Token>& tokens, bool protect_quotes, bool phrase_variation = false);
+void freeze_tokens(std::vector<Token>& tokens, bool protect_quotes, bool phrase_variation = false, bool clarity = false);
 
 struct SubstituteOutcome {
   std::vector<Token> tokens;
@@ -218,6 +220,7 @@ struct SubstituteOutcome {
 
 [[nodiscard]] std::vector<Change> rephrase(std::vector<Token>& tokens,
     const Options& options, std::uint64_t ordinal);
+[[nodiscard]] Result rewrite_standard(std::string_view input, const Options& options);
 void fix_articles(std::vector<Token>& tokens, std::vector<Change>& changes);
 
 [[nodiscard]] std::string concat_tokens(const std::vector<Token>& tokens);

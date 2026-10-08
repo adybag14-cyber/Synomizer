@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0 - 2026-10-08
+
+- Add transformer-free STE, plain-language and combined authoring profiles, independent of the three-variation engine. Produce one consistent draft or a check-only report.
+- Add conservative directional clarity edits, supported explicit-agent passive conversions and independent-clause separation without guessing actors or changing modal/negative scope.
+- Provide estimated length, possible grammar and optional supplied-vocabulary screening with explicit review-required status; no complete standards or semantic-equivalence certification.
+- Add reader/task context, user-authorized TSV terminology import, report display and full JSON export in the CLI and browser. No official dictionary or copyrighted standard text is distributed.
+- Document current standards references, limits and the optional Bonsai2/WebGPU path; no model is embedded or downloaded.
+- Add independent native, browser/native parity and end-to-end standards tests while retaining the original variation workflow.
+
 ## 1.3.0 - 2026-10-07
 
 - Hoist the existing purpose-phrase sentence guard out of its per-token loop. This removes a quadratic scan exposed by the long academic fixture under sanitizers, without shortening the fixture or relaxing its timeout.

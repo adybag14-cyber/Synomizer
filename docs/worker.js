@@ -10,12 +10,16 @@ resources.then(() => postMessage({ type: "ready" })).catch((error) => postMessag
 self.onmessage = async ({ data }) => {
   try {
     if (typeof data.text !== "string" || data.text.length > 200_000) throw new Error("Use at most 200,000 characters in the browser. The C++ tool supports longer files.");
-    const generated = rewriteVariants(data.text, data.options, await resources, 3);
+    const standard = (data.options.profile ?? "variation") !== "variation";
+    const generated = rewriteVariants(data.text, data.options, await resources, standard ? 1 : 3);
     const batch = { requested: generated.requested, candidatesConsidered: generated.attempts,
       variations: generated.variants.map((variant) => ({ result: variant.result,
         options: { seed: variant.seed, style: variant.style, intensity: data.options.intensity ?? 1,
           synonyms: data.options.synonyms !== false, arrange: data.options.arrange !== false,
-          protectQuotes: data.options.protectQuotes !== false, protectedTerms: [...(data.options.protectedTerms || [])] } })) };
+          protectQuotes: data.options.protectQuotes !== false, protectedTerms: [...(data.options.protectedTerms || [])],
+          ...(standard ? { profile: data.options.profile, textType: data.options.textType ?? "description",
+            checkOnly: data.options.checkOnly ?? false, audience: data.options.audience ?? "", purpose: data.options.purpose ?? "",
+            vocabulary: data.options.vocabulary ?? [] } : {}) } })) };
 
     postMessage({ type: "result", id: data.id, batch });
   } catch (error) { postMessage({ type: "error", id: data.id, message: error.message || "Could not rewrite that text." }); }

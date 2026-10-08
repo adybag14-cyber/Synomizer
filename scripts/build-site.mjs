@@ -7,7 +7,7 @@ const root = new URL("../", import.meta.url);
 const site = new URL("site/", root);
 await rm(site, { recursive: true, force: true });
 await mkdir(new URL("data/", site), { recursive: true });
-for (const name of ["index.html", "styles.css", "app.js", "engine.js", "worker.js", "favicon.svg"])
+for (const name of ["index.html", "styles.css", "app.js", "engine.js", "worker.js", "standards.js", "standards.html", "favicon.svg"])
   await cp(new URL(`docs/${name}`, root), new URL(name, site));
 for (const name of ["lexicon.tsv", "phrases.txt", "rephrases.tsv"])
   await cp(new URL(`data/${name}`, root), new URL(`data/${name}`, site));
@@ -17,7 +17,7 @@ const { version } = JSON.parse(await readFile(new URL("package.json", root), "ut
 let commit = "local";
 try { commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: fileURLToPath(root), encoding: "utf8" }).trim(); } catch { /* Source archives need not contain .git. */ }
 const sha256 = {};
-for (const name of ["index.html", "styles.css", "app.js", "engine.js", "worker.js", "favicon.svg", "data/lexicon.tsv", "data/phrases.txt", "data/rephrases.tsv", "LICENSE"])
+for (const name of ["index.html", "styles.css", "app.js", "engine.js", "worker.js", "standards.js", "standards.html", "favicon.svg", "data/lexicon.tsv", "data/phrases.txt", "data/rephrases.tsv", "LICENSE"])
   sha256[name] = createHash("sha256").update(await readFile(new URL(name, site))).digest("hex");
 const manifest = JSON.stringify({ version, commit, sha256 }, null, 2) + "\n";
 await writeFile(new URL("version.json", site), manifest);

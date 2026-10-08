@@ -292,3 +292,18 @@ button:disabled:hover { background: var(--ink); color: var(--paper); border-colo
   .variant-stats, .variant-options { min-height: 0; }
   .original-sheet textarea { height: 14rem; }
 }
+
+.standard-options { margin-top: 1.2rem; padding: 1rem; border: 1px solid var(--line); }
+.standard-options legend { padding: 0 0.5rem; font-weight: bold; }
+.standard-options p, .standards-report p { line-height: 1.5; }
+.standard-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+.standard-fields label { display: flex; flex-direction: column; gap: 0.3rem; }
+.standard-fields input[type="text"] { width: 100%; }
+#vocabulary { min-height: 6rem; font: 0.9rem ui-monospace, monospace; }
+#profile { max-width: 100%; }
+.standards-report { margin-top: 2rem; overflow-wrap: anywhere; }
+#standard-findings { padding-left: 1.5rem; }
+#standard-findings li { margin-bottom: 1rem; }
+#standard-findings p { margin: 0.3rem 0; }
+.finding-evidence { border-left: 3px solid var(--line); padding-left: 0.6rem; }
+@media (max-width: 700px) { .standard-fields { grid-template-columns: 1fr; } }

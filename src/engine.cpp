@@ -4,6 +4,7 @@
 #include "internal.hpp"
 
 #include <utility>
+#include <stdexcept>
 
 namespace synomizer {
 
@@ -15,6 +16,8 @@ std::string_view version() noexcept {
 }
 
 Result rewrite(std::string_view input, const Options& options) {
+  if (options.profile != "variation") return rewrite_standard(input, options);
+  if (options.check_only) throw std::invalid_argument("check-only requires a standards profile");
   Options settings = options;
   if (settings.intensity < 0) {
     settings.intensity = 0;

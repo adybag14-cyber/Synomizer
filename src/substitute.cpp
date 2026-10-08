@@ -438,7 +438,7 @@ void freeze_quotes(std::vector<Token>& tokens) {
   }
 }
 
-void freeze_phrases(std::vector<Token>& tokens, bool variation) {
+void freeze_phrases(std::vector<Token>& tokens, bool variation, bool clarity = false) {
   const std::vector<int> words = word_positions(tokens);
   std::vector<bool> used(words.size(), false);
   for (int slot = 0; slot < static_cast<int>(words.size()); ++slot) {
@@ -446,6 +446,19 @@ void freeze_phrases(std::vector<Token>& tokens, bool variation) {
       continue;
     }
     for (const auto& phrase : lexicon().phrases_starting(at_slot(tokens, words, slot), variation)) {
+      bool clarity_span=false;
+      if(clarity) for(const auto& rule:lexicon().clarity_rules) {
+        if(rule.source.size()<phrase.size() || !std::equal(phrase.begin(),phrase.end(),rule.source.begin())) continue;
+        const auto at=static_cast<std::size_t>(words[static_cast<std::size_t>(slot)]);
+        const auto n=rule.source.size()*2-1;
+        if(n>tokens.size()-at) continue;
+        bool exact=true;
+        for(std::size_t k=0;k<n;++k)
+          if(tokens[at+k].frozen || (k%2 ? tokens[at+k].text!=" " : lower_copy(tokens[at+k].text)!=rule.source[k/2])) {exact=false;break;}
+        if(exact) {clarity_span=true;break;}
+      }
+      if(clarity_span) continue;
+
       if (slot + static_cast<int>(phrase.size()) > static_cast<int>(words.size())) {
         continue;
       }
@@ -565,11 +578,11 @@ bool freeze_terms(std::vector<Token>& tokens, const std::vector<std::string>& te
 
 void protect_remaining_phrases(std::vector<Token>& tokens) { freeze_phrases(tokens, false); }
 
-void freeze_tokens(std::vector<Token>& tokens, bool protect_quotes, bool phrase_variation) {
+void freeze_tokens(std::vector<Token>& tokens, bool protect_quotes, bool phrase_variation, bool clarity) {
   if (protect_quotes) {
     freeze_quotes(tokens);
   }
-  freeze_phrases(tokens, phrase_variation);
+  freeze_phrases(tokens, phrase_variation, clarity);
   freeze_names(tokens);
 }
 

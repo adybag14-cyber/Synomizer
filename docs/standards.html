@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Synomizer — standards-oriented authoring coverage</title>
+  <link rel="stylesheet" href="styles.css"><link rel="icon" href="favicon.svg" type="image/svg+xml">
+</head>
+<body>
+  <header class="mast"><p class="kicker">Synomizer / authoring guidance</p><h1>Clarity, not certification</h1></header>
+  <main>
+    <p><a href="index.html">Return to the editor</a></p>
+    <p>The standards-oriented profiles are deterministic authoring aids. They use no transformer, language model or rewriting service. They do not establish full conformity with ASD-STE100 or ISO 24495-1. An unchanged sentence can still need substantial work.</p>
+    <h2>Choose the right task</h2>
+    <p><strong>Three variations</strong> is the existing synonym and sentence-variation workflow. <strong>ASD-STE100 aid</strong> and <strong>plain-language aid</strong> instead make directional clarity edits and return one consistent draft. <strong>Combined</strong> gives the same conservative editing path with both sets of review prompts. These profiles do not make terminology more varied merely to create alternatives.</p>
+    <p><strong>Check only</strong> does not rewrite the text; it returns findings and screening metrics. Line endings are normalized to LF, as elsewhere in Synomizer. Copy and text download contain the text only. JSON exports also contain the selected settings, supplied vocabulary, edits and review report.</p>
+    <h2>What is automated</h2>
+    <p>The engine can shorten a small set of wordy constructions, expand unambiguous contractions, change supported simple-past passive clauses when the source explicitly states the actor, and separate supported independent clauses. Conditions, negation, modal obligations and unclear structures block the corresponding structural edits. Quoted text and user-protected terms remain protected according to the selected controls. The original is never replaced.</p>
+    <p>The report screens sentence length, possible passive constructions, selected tense and -ing patterns, unresolved contractions and vocabulary spellings. A possible passive or an -ing suffix is a review cue, not proof of a violation. The algorithm does not automatically generate instructions, infer missing actors, delete qualifications or decide the intended meaning of a technical term.</p>
+    <h2>ASD-STE100: Issue 9, 15 January 2025</h2>
+    <p>The correct standard name is <strong>ASD-STE100</strong>. Its controlled vocabulary depends on approved meanings, grammatical roles, permitted forms and appropriate technical terminology. Merely substituting a common synonym cannot verify these requirements.</p>
+    <p>The application uses screening targets of 20 words for procedures and 25 for descriptions or notes. Its token counts are <strong>estimates</strong>, not the complete section 8 counting method. That method treats, among other things, measurements, quoted material, parentheses, names, titles and list structure specially. Review these cases before deciding whether a sentence exceeds the applicable limit.</p>
+    <p>No official dictionary is bundled. An optional user-authorized TSV can provide terminology and general spellings. The application does not verify that the supplied table is an authorized, complete STE dictionary. It does not resolve a word's approved sense or part of speech merely because its spelling appears in that table. Imported technical terms, names and titles are protected, not automatically certified. Complete review also needs the current rules for procedural content, safety instructions, noun groups, spelling directives, paragraph structure and terminology consistency.</p>
+    <p>ASD describes software as an aid to authors and does not endorse or certify STE tools. Synomizer is not affiliated with or approved by ASD.</p>
+    <h2>ISO 24495-1:2023</h2>
+    <p>Plain-language work begins with readers and their task. The four review areas are relevance, findability, understanding and usability. The editor records audience and purpose, then prompts the author to review content, organization, terminology, presentation and reader evaluation. Entering context is not equivalent to testing the document with readers.</p>
+    <p><strong>ISO 24495-1 does not prescribe the application's 25-word screening target.</strong> The standard is not a synonym dictionary or a fixed readability-score threshold. The application does not evaluate whether readers can find, understand and use the information. That requires an authoring and evaluation process beyond a text transformation.</p>
+    <h2>Vocabulary TSV format</h2>
+    <p>Use four tab-separated columns without a header: <code>term</code>, <code>part of speech</code>, <code>intended meaning</code>, <code>category</code>. A line beginning with <code>#</code> is a comment. Parts of speech are noun, verb, adjective, adverb, preposition, conjunction, pronoun, article or other. Categories are general, technical-noun, technical-verb, name or title. A technical category must agree with its noun or verb part of speech.</p>
+    <p>The limit is 5,000 entries in 1,000,000 UTF-8 bytes, with at most 200 bytes per term and 500 per meaning. Use only data you are authorized to use. Neither the ASD standard nor the ISO document is distributed under this project's Apache-2.0 licence. The project's clarity rules and examples are independently written, not copies of a standard dictionary.</p>
+    <h2>Bonsai 2 and WebGPU: researched, not embedded</h2>
+    <p>Bonsai 2 is still a transformer-based model. Its publisher lists a 5.95 GB PTQ1_0 language-weight file; this is not a guarantee that a 6 GB GPU or browser can run it. Inference also needs working memory, runtime support and browser GPU capabilities. The publisher's native packs require their compatible runtime rather than an arbitrary GGUF loader.</p>
+    <p>A community WebGPU demo exists for Ternary-Bonsai-2-27B. This release does <strong>not</strong> load that model, embed that external page or send your text to it. The link below leaves Synomizer. Model downloads and any caching or data handling on that site are separate from this editor.</p>
+    <p>A future model-assisted mode would need an explicit opt-in download, a pinned compatible runtime and weights, bounded context and output sizes, cancellation, device-loss recovery and a delete-cache control. Its proposals should pass through the deterministic checker and human review. A model cannot certify conformance or automatically establish scientific equivalence.</p>
+    <h2>Primary references</h2>
+    <p>Sources checked on 8 October 2026. Consult the rights holder for authorized access and the current requirements.</p>
+    <p><a href="https://www.asd-ste100.org/" rel="noreferrer">ASD-STE100 official site</a> · <a href="https://www.asd-ste100.org/STEsoftware.html" rel="noreferrer">ASD guidance on software tools</a> · <a href="https://www.iso.org/standard/78907.html" rel="noreferrer">ISO 24495-1:2023 catalogue record</a> · <a href="https://www.iplfederation.org/iso-standard/" rel="noreferrer">International Plain Language Federation's explanation</a></p>
+    <p><a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf" rel="noreferrer">Prism ML Bonsai 2 model card and runtime requirements</a> · <a href="https://huggingface.co/spaces/webml-community/ternary-bonsai-2-webgpu-kernels" rel="noreferrer">External community WebGPU demo</a></p>
+  </main>
+  <footer class="colophon"><p>Synomizer 1.4.0 / Apache-2.0 source code. Standard names and documents remain the property of their respective owners.</p></footer>
+</body>
+</html>
