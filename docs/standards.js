@@ -57,15 +57,17 @@ export function rewriteStandard(input, options, resources, h) {
   validate(o);
   const { lower } = h;
   const tokenize = text => h.splitPieces(text).flatMap(p => p.sentence ? p.tokens : [{ text: p.text, word: false, frozen: false, replaced: false }]);
-  const vocabularyIndex = new Map(), spellings = new Set();
+  const vocabularyIndex = new Map(), countingNames = new Map(), spellings = new Set();
   for (const e of o.vocabulary) {
     const t = tokenize(trim(e.term)); spellings.add(lower(trim(e.term)));
+    if(["name","title"].includes(e.category)&&t.length){const key=lower(t[0].text);if(!countingNames.has(key))countingNames.set(key,[]);countingNames.get(key).push(t);}
     if (e.category !== "general" && t.length) {
       const key = lower(t[0].text);
       if (!vocabularyIndex.has(key)) vocabularyIndex.set(key, []);
       vocabularyIndex.get(key).push(t);
     }
   }
+  for(const patterns of countingNames.values())patterns.sort((a,b)=>b.length-a.length);
   for (const patterns of vocabularyIndex.values()) patterns.sort((a, b) => b.length - a.length);
   const prepare = t => {
     let vocabularyLocked=false;
@@ -206,30 +208,40 @@ export function rewriteStandard(input, options, resources, h) {
     return out;
   };
   const countPieces = text => {
-    const out=[];
-    for(const piece of h.splitPieces(text)) {
-      const first=piece.text.indexOf('\n');
-      if(!piece.sentence||first<0||!trim(piece.text.slice(0,first)).endsWith(':')) {out.push(piece);continue;}
-      const lines=piece.text.split('\n').map(trim);
-      const valid=lines.length>=3&&lines.length<=101&&lines.slice(1).every(x=>x.startsWith('- ')&&x.length>2);
-      if(!valid){out.push(piece);continue;}
-      for(let i=0;i<lines.length;i++) {const value=i?lines[i].slice(2):lines[i];out.push({sentence:true,text:value,tokens:tokenize(value)});}
+    const out=[];let pending='';
+    const flush=()=>{out.push(...h.splitPieces(pending));pending='';};
+    for(const raw of text.split('\n')) {
+      const line=trim(raw),marker=line.match(/^(?:[-*+] |[0-9]+[.)] )/);
+      if(!line)flush();
+      else if(marker){flush();out.push(...h.splitPieces(line.slice(marker[0].length)));}
+      else {if(pending)pending+='\n';pending+=line;}
     }
-    return out;
+    flush();return out;
   };
-  const countGrouped = t => {
+  const countGrouped = (t,depth=0) => {
+    if(depth>16)return {words:count(t),nested:[]};
     const ends=new Map(),paren=[];let quote=-1,quoteEnd='';
     for(let i=0;i<t.length;i++) {
       const w=t[i].text;
       if(quote!==-1){if(w===quoteEnd){ends.set(quote,i);quote=-1;}continue;}
-      if(w==='"'||w==='\u201c'){quote=i;quoteEnd=w==='"'?'"':'\u201d';continue;}
+      if(['"',"'",'\u201c','\u2018'].includes(w)){quote=i;quoteEnd=w==='\u201c'?'\u201d':w==='\u2018'?'\u2019':w;continue;}
       if(w==='(')paren.push(i);
       else if(w===')'&&paren.length)ends.set(paren.pop(),i);
     }
-    let n=0;
+    let n=0;const nested=[];
     for(let i=0;i<t.length;i++) {
       const token=t[i];
-      if(ends.has(i)){n++;i=ends.get(i);continue;}
+      if(ends.has(i)){
+        n++;
+        if(token.text==='('){const inner=countGrouped(t.slice(i+1,ends.get(i)),depth+1);if(inner.words>1)nested.push(inner.words);nested.push(...inner.nested);}
+        i=ends.get(i);continue;
+      }
+      let named=false;
+      for(const pattern of countingNames.get(lower(token.text))||[]) {
+        if(pattern.length>t.length-i)continue;
+        if(pattern.every((p,k)=>(space(p)&&space(t[i+k]))||lower(p.text)===lower(t[i+k].text))){n++;i+=pattern.length-1;named=true;break;}
+      }
+      if(named)continue;
       if(!token.word&&!(token.frozen&&!space(token)))continue;
       n++;
       const number=/[0-9]/.test(token.text)&&/^[0-9.+-]+$/.test(token.text);
@@ -239,7 +251,7 @@ export function rewriteStandard(input, options, resources, h) {
         else if(unit==='degrees'&&i+4<t.length&&space(t[i+3])&&['celsius','fahrenheit'].includes(lower(t[i+4].text)))i+=4;
       }
     }
-    return n;
+    return {words:n,nested};
   };
   const audit = (text, findings = null) => {
     const metrics = { sentences: 0, words: 0, longestSentence: 0, longSentences: 0, possiblePassives: 0, unlistedWords: 0 };
@@ -247,13 +259,17 @@ export function rewriteStandard(input, options, resources, h) {
     const add = (code, severity, message, excerpt, sentence) => { if (findings && findings.length < 250) findings.push({ code, severity, message, evidence: excerpt, sentence }); };
     for (const piece of countPieces(text)) {
       if (!piece.sentence) continue;
-      const t = piece.tokens.map(x => ({ ...x })), n = countGrouped(t); if (!n) continue;
+      const t = piece.tokens.map(x => ({ ...x })), grouping=countGrouped(t), n = STE(o)?grouping.words:count(t); if (!n) continue;
       metrics.sentences++; metrics.words += count(t); metrics.longestSentence = Math.max(metrics.longestSentence, n);
       const p = positions(t), note = p.length && lower(t[p[0]].text) === "note";
       const limit = STE(o) && o.textType === "procedure" && !note ? 20 : 25;
       if (n > limit) {
         metrics.longSentences++;
         add(STE(o) ? (limit === 20 ? "STE-5.1" : "STE-6.3") : "PL-SENTENCE", "review", `${n} screening words exceed the ${limit}-word target. Review grouping and sentence structure.`, evidence(t), metrics.sentences);
+      }
+      if(STE(o))for(const inner of grouping.nested){
+        metrics.sentences++;metrics.longestSentence=Math.max(metrics.longestSentence,inner);
+        if(inner>limit){metrics.longSentences++;add('STE-8.5','review','A parenthetical inner count unit exceeds the selected target. Review both the inner content and its containing sentence.',evidence(t),metrics.sentences);}
       }
       if (passive(t)) {
         metrics.possiblePassives++;
@@ -262,7 +278,7 @@ export function rewriteStandard(input, options, resources, h) {
       }
       prepare(t);
       if(STE(o)&&t.some(x=>!x.frozen&&x.text===';'))add('STE-8.1','review','A semicolon remains. Separate the statements only after their scope and relationship are clear.',evidence(t),metrics.sentences);
-      if(STE(o)&&t.some(x=>x.text==='('))add('STE-8.5','review','Parenthetical content is grouped in the outer count. Review the separate inner count and the permitted use of parentheses.',evidence(t),metrics.sentences);
+      if(STE(o)&&t.some(x=>x.text==='('))add('STE-8.5','review','Parenthetical content is grouped in the outer count; supported inner units are screened separately. Review nested, multi-sentence or complex cases and the permitted use of parentheses.',evidence(t),metrics.sentences);
       const coordinated = t.some(x => x.text === "," || x.text === ";") && t.some(x => x.text === ";" || ["and","but"].includes(lower(x.text)));
       if (coordinated && !splitIndependent(t)) add("CLARITY-SCOPE", "review", "Coordinated, reported or protected material was not automatically split. Review attribution, conditions and the scope of each clause before separating it.", evidence(t), metrics.sentences);
       let ing = false, contraction = false, complex = false;

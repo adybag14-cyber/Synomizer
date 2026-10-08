@@ -72,12 +72,15 @@ void validate(const Options& o) {
 struct Vocabulary {
   std::unordered_map<std::string,std::vector<Tokens>> protected_index;
   std::unordered_set<std::string> spellings;
+  std::unordered_map<std::string,std::vector<Tokens>> counting_names;
   explicit Vocabulary(const Options& options) {
     for(const auto& e:options.vocabulary) {
       auto t=tokenize(trim(e.term));
       spellings.insert(lower_copy(trim(e.term)));
+      if((e.category=="name"||e.category=="title")&&!t.empty())counting_names[lower_copy(t.front().text)].push_back(t);
       if(e.category!="general" && !t.empty()) protected_index[lower_copy(t.front().text)].push_back(std::move(t));
     }
+    for(auto& [key,patterns]:counting_names){(void)key;std::stable_sort(patterns.begin(),patterns.end(),[](const auto& a,const auto& b){return a.size()>b.size();});}
     for(auto& [key,patterns]:protected_index) {
       (void)key;
       std::stable_sort(patterns.begin(),patterns.end(),[](const auto& a,const auto& b){return a.size()>b.size();});
@@ -258,25 +261,30 @@ void simplify(Tokens& t,std::vector<Change>& changes) {
   }
   t=std::move(out);
 }
-// Screening units for a supported vertical list. This does not change source text.
+// Read supported list/step markers for count screening only; source text is never edited here.
 std::vector<Piece> count_pieces(std::string_view text) {
-  std::vector<Piece> out;
-  for(auto& piece:split_pieces(text)) {
-    const auto first=piece.text.find('\n');
-    if(!piece.sentence || first==std::string::npos || !trim(piece.text.substr(0,first)).ends_with(':')) {out.push_back(std::move(piece));continue;}
-    std::vector<std::string> lines;std::istringstream stream(piece.text);std::string line;
-    while(std::getline(stream,line))lines.push_back(trim(line));
-    bool valid=lines.size()>=3 && lines.size()<=101;
-    for(std::size_t i=1;i<lines.size();++i)if(!lines[i].starts_with("- ") || lines[i].size()<=2)valid=false;
-    if(!valid){out.push_back(std::move(piece));continue;}
-    for(std::size_t i=0;i<lines.size();++i) {
-      auto value=i?lines[i].substr(2):lines[i];
-      out.push_back({true,value,tokenize(value)});
+  std::vector<Piece> out;std::string pending;
+  const auto flush=[&]{for(auto& p:split_pieces(pending))out.push_back(std::move(p));pending.clear();};
+  std::size_t begin=0;
+  while(begin<text.size()) {
+    auto end=text.find('\n',begin);if(end==std::string_view::npos)end=text.size();
+    auto line=trim(std::string(text.substr(begin,end-begin)));std::size_t marker=0;
+    if(line.size()>2 && in(line.substr(0,1),{"-","*","+"}) && line[1]==' ')marker=2;
+    else {
+      std::size_t n=0;while(n<line.size() && line[n]>='0' && line[n]<='9')++n;
+      if(n && n+1<line.size() && (line[n]=='.'||line[n]==')') && line[n+1]==' ')marker=n+2;
     }
+    if(line.empty()){flush();}
+    else if(marker){flush();for(auto& p:split_pieces(line.substr(marker)))out.push_back(std::move(p));}
+    else {if(!pending.empty())pending+='\n';pending+=line;}
+    begin=end==text.size()?end:end+1;
   }
-  return out;
+  flush();return out;
 }
-std::size_t count_grouped(const Tokens& t) {
+
+struct GroupedCount {std::size_t words=0;std::vector<std::size_t> nested;};
+GroupedCount count_grouped(const Tokens& t,const Vocabulary& vocabulary,int depth=0) {
+  if(depth>16)return {count(t),{}};
   // Match delimiters once. Repeated unmatched parentheses must not cause
   // a full-suffix scan at every token in arbitrary input.
   const auto missing=t.size();
@@ -285,14 +293,33 @@ std::size_t count_grouped(const Tokens& t) {
   for(std::size_t i=0;i<t.size();++i) {
     const auto& w=t[i].text;
     if(quote!=missing) {if(w==quote_end){ends[quote]=i;quote=missing;}continue;}
-    if(w=="\"" || w=="\xE2\x80\x9C") {quote=i;quote_end=w=="\""?"\"":"\xE2\x80\x9D";continue;}
+    if(in(w,{"\"","'","\xE2\x80\x9C","\xE2\x80\x98"})) {quote=i;quote_end=w=="\xE2\x80\x9C"?"\xE2\x80\x9D":w=="\xE2\x80\x98"?"\xE2\x80\x99":w;continue;}
     if(w=="(")paren.push_back(i);
     else if(w==")"&&!paren.empty()){ends[paren.back()]=i;paren.pop_back();}
   }
-  std::size_t n=0;
+  GroupedCount result;
+  auto& n=result.words;
   for(std::size_t i=0;i<t.size();++i) {
     const auto& token=t[i];
-    if(ends[i]!=missing){++n;i=ends[i];continue;}
+    if(ends[i]!=missing){
+      ++n;
+      if(token.text=="(") {
+        const auto inner=count_grouped(Tokens(t.begin()+static_cast<std::ptrdiff_t>(i+1),t.begin()+static_cast<std::ptrdiff_t>(ends[i])),vocabulary,depth+1);
+        if(inner.words>1)result.nested.push_back(inner.words);
+        result.nested.insert(result.nested.end(),inner.nested.begin(),inner.nested.end());
+      }
+      i=ends[i];continue;
+    }
+    bool named=false;
+    if(const auto found=vocabulary.counting_names.find(lower_copy(token.text));found!=vocabulary.counting_names.end()) {
+      for(const auto& pattern:found->second) {
+        if(pattern.size()>t.size()-i)continue;
+        bool match=true;
+        for(std::size_t k=0;k<pattern.size();++k)if(!(space(pattern[k])&&space(t[i+k])) && lower_copy(pattern[k].text)!=lower_copy(t[i+k].text)){match=false;break;}
+        if(match){++n;i+=pattern.size()-1;named=true;break;}
+      }
+    }
+    if(named)continue;
     if(!token.word && !(token.frozen&&!space(token)))continue;
     ++n;
     bool number=!token.text.empty() && std::ranges::any_of(token.text,[](unsigned char c){return c>='0'&&c<='9';}) &&
@@ -303,7 +330,7 @@ std::size_t count_grouped(const Tokens& t) {
       else if(unit=="degrees" && i+4<t.size() && space(t[i+3]) && in(lower_copy(t[i+4].text),{"celsius","fahrenheit"}))i+=4;
     }
   }
-  return n;
+  return result;
 }
 StandardMetrics audit(std::string_view text,const Options& o,const Vocabulary& vocabulary,std::vector<StandardFinding>* findings) {
   StandardMetrics metrics;
@@ -313,7 +340,7 @@ StandardMetrics audit(std::string_view text,const Options& o,const Vocabulary& v
   };
   for(auto& piece:count_pieces(text)) {
     if(!piece.sentence) continue;
-    auto tokens=piece.tokens; const auto n=count_grouped(tokens); if(!n) continue;
+    auto tokens=piece.tokens; const auto grouping=count_grouped(tokens,vocabulary); const auto n=ste(o)?grouping.words:count(tokens); if(!n) continue;
     ++metrics.sentences; metrics.words+=count(tokens);metrics.longest_sentence=std::max(metrics.longest_sentence,n);
     const auto p=positions(tokens);
     const bool note=!p.empty() && lower_copy(tokens[p[0]].text)=="note";
@@ -322,6 +349,10 @@ StandardMetrics audit(std::string_view text,const Options& o,const Vocabulary& v
       ++metrics.long_sentences;
       add(ste(o)?(limit==20?"STE-5.1":"STE-6.3"):"PL-SENTENCE","review",std::to_string(n)+" screening words exceed the "+std::to_string(limit)+"-word target. Review grouping and sentence structure.",evidence(tokens),metrics.sentences);
     }
+    if(ste(o)) for(const auto inner:grouping.nested) {
+      ++metrics.sentences;metrics.longest_sentence=std::max(metrics.longest_sentence,inner);
+      if(inner>limit){++metrics.long_sentences;add("STE-8.5","review","A parenthetical inner count unit exceeds the selected target. Review both the inner content and its containing sentence.",evidence(tokens),metrics.sentences);}
+    }
     if(possible_passive(tokens)) {
       ++metrics.possible_passives;
       const auto message=!ste(o)?"Possible passive construction. Review whether the reader needs the actor or the result in focus; do not invent an actor.":o.text_type=="procedure"?"Possible passive construction. Confirm the action and responsible actor; do not invent an agent.":"Possible passive construction. For STE descriptions, an unknown agent can justify the passive.";
@@ -329,7 +360,7 @@ StandardMetrics audit(std::string_view text,const Options& o,const Vocabulary& v
     }
     prepare(tokens,o,vocabulary);
     if(ste(o) && std::ranges::any_of(tokens,[](const auto& t){return !t.frozen && t.text==";";})) add("STE-8.1","review","A semicolon remains. Separate the statements only after their scope and relationship are clear.",evidence(tokens),metrics.sentences);
-    if(ste(o) && std::ranges::any_of(tokens,[](const auto& t){return t.text=="(";})) add("STE-8.5","review","Parenthetical content is grouped in the outer count. Review the separate inner count and the permitted use of parentheses.",evidence(tokens),metrics.sentences);
+    if(ste(o) && std::ranges::any_of(tokens,[](const auto& t){return t.text=="(";})) add("STE-8.5","review","Parenthetical content is grouped in the outer count; supported inner units are screened separately. Review nested, multi-sentence or complex cases and the permitted use of parentheses.",evidence(tokens),metrics.sentences);
     const bool coordinated=std::ranges::any_of(tokens,[](const auto& x){return x.text=="," || x.text==";";}) &&
       std::ranges::any_of(tokens,[](const auto& x){return x.text==";" || in(lower_copy(x.text),{"and","but"});});
     if(coordinated && !split_independent(tokens)) add("CLARITY-SCOPE","review","Coordinated, reported or protected material was not automatically split. Review attribution, conditions and the scope of each clause before separating it.",evidence(tokens),metrics.sentences);
