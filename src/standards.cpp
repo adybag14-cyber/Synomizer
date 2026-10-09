@@ -458,9 +458,35 @@ Result rewrite_standard(std::string_view input,const Options& options) {
     add("ISO-UNDERSTANDABLE","Review terminology, explanations, sentence relationships and examples for the intended readers. Short words alone do not establish understanding.");
     add("ISO-USABLE","Evaluate the document with representative readers and revise it using their results. No reader evaluation was performed by this tool.");
   }
+  const auto context_findings=report.findings;
   report.before=audit(source,options,vocabulary,nullptr);
   report.after=audit(result.text,options,vocabulary,&report.findings);
   if(report.findings.size()==250) report.findings.push_back({"REPORT-LIMIT","review","The on-screen/exported finding list is capped at 250 entries. Metrics cover the complete input; review the full document.","",0});
+  // Use the exact final draft for both reviews. Do not run a second rewrite,
+  // relax terminology, or confuse the ISO advisory count with STE grouping.
+  const auto draft_digest=sha256_text(result.text);
+  for(const auto* target:{"ste","plain"}) {
+    if(options.profile!="combined" && options.profile!=target)continue;
+    const bool controlled=std::string_view(target)=="ste";
+    StandardScreen screen;
+    screen.profile=target;
+    screen.standard=controlled?"ASD-STE100 Issue 9":"ISO 24495-1:2023";
+    screen.counting_basis=controlled?"STE grouped count screen; estimates, not full section 8 verification":"Ordinary-word clarity screen; the 25-word target is advisory, not an ISO requirement";
+    screen.sentence_target=controlled && options.text_type=="procedure"?20u:25u;
+    screen.draft_sha256=draft_digest;
+    const auto relevant=[&](const StandardFinding& f){return controlled?!f.code.starts_with("ISO-"):!f.code.starts_with("STE-");};
+    if(options.profile!="combined" || controlled) {
+      screen.before=report.before;screen.after=report.after;
+      for(const auto& f:report.findings)if(relevant(f))screen.findings.push_back(f);
+    } else {
+      auto review=options;review.profile=target;
+      for(const auto& f:context_findings)if(relevant(f))screen.findings.push_back(f);
+      screen.before=audit(source,review,vocabulary,nullptr);
+      screen.after=audit(result.text,review,vocabulary,&screen.findings);
+      if(screen.findings.size()==250)screen.findings.push_back({"REPORT-LIMIT","review","The on-screen/exported finding list is capped at 250 entries. Metrics cover the complete input; review the full document.","",0});
+    }
+    report.screens.push_back(std::move(screen));
+  }
   result.standards=std::move(report);
   assess_conformity(source,options,result);
   return result;

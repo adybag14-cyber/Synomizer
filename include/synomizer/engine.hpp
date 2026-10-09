@@ -51,6 +51,13 @@ struct ConformityAssessment {
   // A rule identifier inventory is not evidence that a rule was verified.
   std::vector<RuleAssessment> requirements;
 };
+// Separate review perspectives on the same draft, not sequential rewrites.
+struct StandardScreen {
+  std::string standard, profile, counting_basis, draft_sha256;
+  std::size_t sentence_target = 25;
+  StandardMetrics before, after;
+  std::vector<StandardFinding> findings;
+};
 struct StandardsReport {
   std::string profile, text_type, status = "review-required", audience, purpose;
   std::size_t sentence_target = 25, vocabulary_entries = 0;
@@ -59,6 +66,7 @@ struct StandardsReport {
   StandardMetrics before, after;
   std::vector<StandardFinding> findings;
   ConformityAssessment conformity;
+  std::vector<StandardScreen> screens;
 };
 [[nodiscard]] std::vector<VocabularyEntry> parse_vocabulary(std::string_view tsv);
 

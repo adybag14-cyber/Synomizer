@@ -25,7 +25,7 @@
           <option value="variation">Three variations</option>
           <option value="ste">ASD-STE100 authoring aid</option>
           <option value="plain">ISO 24495-1 plain-language aid</option>
-          <option value="combined">STE + plain-language aid</option>
+          <option value="combined">Both: ASD-STE100 + ISO 24495-1</option>
         </select>
       </label>
       <label>Seed <input id="seed" name="seed" type="text" inputmode="numeric" value="1" autocomplete="off" spellcheck="false"></label>
@@ -50,6 +50,11 @@
       <button type="button" id="retry" hidden>Retry loading</button>
       <button type="button" id="reset">Sample</button>
     </form>
+    <div class="standards-shortcut" aria-label="Combined standards restructuring">
+      <button id="both-standards" type="button" aria-describedby="both-standards-help" aria-controls="standard-options">Restructure for both standards</button>
+      <p id="both-standards-help" class="hint"><strong>ASD-STE100 + ISO 24495-1.</strong> Starts from your original, enables sentence/list restructuring and strict export, and keeps your terminology and reader context. One draft, two review views; not a conformity certificate.</p>
+    </div>
+    <p id="mode-route" class="hint" aria-live="polite">Three variations is ordinary rewriting. Choose the button above for both standards.</p>
     <fieldset id="standard-options" class="standard-options" hidden>
       <legend>Standards-oriented drafting, without a language model</legend>
       <p>These profiles produce one consistent draft, not random alternatives. They apply a limited set of clarity edits and report review items. They do not certify conformity or verify the meaning.</p>
@@ -127,6 +132,7 @@
             <button type="button" data-action="download" class="secondary" aria-label="Download variation 3 as text" disabled>.txt</button>
             <button type="button" data-action="json" class="secondary" aria-label="Download variation 3 change log" disabled>.json</button>
             <button type="button" data-action="review" class="secondary" aria-label="Review variation 3 changes" disabled>Review changes</button>
+            <button type="button" data-action="both" class="secondary" aria-describedby="both-standards-help" disabled>Use both standards</button>
           </div>
         </article>
       </div>
@@ -138,6 +144,8 @@
       <div class="sheet-head"><h2 id="standards-heading">Author review required</h2></div>
       <p id="standards-summary" role="status"></p>
       <p id="standards-metrics"></p>
+      <p id="screen-summary" class="hint"></p>
+      <div id="standard-screens" class="standard-screen-grid" aria-label="Separate standards review views"></div>
       <section id="conformity-panel" aria-labelledby="conformity-heading" hidden>
         <h3 id="conformity-heading">Conformity release decision</h3>
         <p id="conformity-state" role="status"></p>
@@ -165,7 +173,7 @@
 
   <footer class="colophon">
     <p>Review before using. Mechanical rewriting cannot guarantee identical meaning or perfect grammar. The C++23 command-line tool is the reference. This page runs the same rules in the browser. It is not a language model, and it does not claim a perfect paraphrase: metaphor, register, and the emphasis of a moved clause can still shift.</p>
-    <p>Version 1.5.0 · Apache-2.0 · Text and settings stay in memory and are not saved after a reload. This site uses no third-party fonts, analytics, or rewriting services.</p>
+    <p>Version 1.5.1 · Apache-2.0 · Text and settings stay in memory and are not saved after a reload. This site uses no third-party fonts, analytics, or rewriting services.</p>
     <p><a href="https://github.com/adybag14-cyber/Synomizer">adybag14-cyber/Synomizer</a></p>
   </footer>
   <noscript><p class="banner">Synomizer needs JavaScript for the live rewrite.</p></noscript>

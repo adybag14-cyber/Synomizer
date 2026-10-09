@@ -3,7 +3,7 @@ import { parseVocabulary } from "./standards.js";
 // SPDX-License-Identifier: Apache-2.0
 const SAMPLE = "The careful teacher helped the happy children. Because the weather was cold, the class started the project late. She quietly explained the main idea, and the students were glad to assist. They purchased a small car for the school trip and quickly found the correct route. The calm physician said the tired boy was healthy. Although the journey was long, the group remained cheerful. The writer described the final result in an honest report. The crowd was silent when the meeting ended. The local students found a useful answer and remained calm. It was a small victory.";
 
-const VERSION = "1.5.0";
+const VERSION = "1.5.1";
 const $ = (selector) => document.querySelector(selector);
 const source = $("#source"), status = $("#status"), banner = $("#banner");
 const changes = $("#changes"), seed = $("#seed"), intensity = $("#intensity"), grid = $("#variations");
@@ -68,7 +68,7 @@ function fail(message) {
   status.textContent = "No current rewrite. Correct the input or retry.";
   for (const card of cards) card.querySelector(".variant-output").setAttribute("aria-busy", "false");
 }
-const STANDARD_NAMES = { ste: "ASD-STE100 aid", plain: "Plain-language aid", combined: "STE + plain-language aid" };
+const STANDARD_NAMES = { ste: "ASD-STE100 aid", plain: "Plain-language aid", combined: "ASD-STE100 + ISO 24495-1 restructuring aid" };
 function updateMode() {
   const standard = $("#profile").value !== "variation";
   $("#standard-options").hidden = !standard;
@@ -77,6 +77,10 @@ function updateMode() {
   $("#variations-heading").textContent = standard ? "One source. One consistent draft." : "One original. Three possibilities.";
   $("#variation-guidance").hidden = standard;
   $("#word-operation-label").textContent = standard ? "Clarity word edits" : "Synonyms";
+  $("#mode-route").textContent = $("#profile").value === "combined" ?
+    "Both standards selected: one source draft is reviewed from STE and ISO plain-language perspectives. Neither review is an automatic approval." :
+    standard ? `${STANDARD_NAMES[$("#profile").value]} selected. Use the combined shortcut to review both standards together.` :
+    "Three variations is ordinary rewriting, including the Restructured choice. Use the combined shortcut above for both standards.";
 }
 function renderConformity(c) {
   $("#conformity-panel").hidden=!c;
@@ -93,7 +97,30 @@ function renderConformity(c) {
   $("#rule-coverage tbody").append(fragment);
   $("#coverage-summary").textContent=`${c.requirements.length} reference entries. STE entries enumerate Issue 9 rule IDs; ISO entries cover four principles, not every guideline. No unverified entry is counted as a pass.`;
 }
+function renderStandardScreens(report) {
+  const host=$("#standard-screens");host.replaceChildren();
+  $("#screen-summary").textContent=report?.screens?.length===2 ? "Both review views assess the same generated draft. STE grouping and ISO plain-language advisory counts stay separate; neither is a conformity verdict." : "";
+  for(const screen of report?.screens||[]) {
+    const section=document.createElement("section");section.className="standard-screen";
+    section.dataset.profile=screen.profile;section.dataset.draftSha256=screen.draftSha256;
+    const heading=document.createElement("h3");heading.textContent=`${screen.standard} review`;
+    const statusText=document.createElement("p");statusText.textContent="Review required - conformity not established.";
+    const metrics=document.createElement("p");metrics.className="screen-metrics";
+    metrics.textContent=`Longest screening unit: ${screen.before.longestSentence} -> ${screen.after.longestSentence} words. Units above ${screen.sentenceTarget}: ${screen.before.longSentences} -> ${screen.after.longSentences}.`;
+    const basis=document.createElement("p");basis.className="hint";basis.textContent=screen.countingBasis;
+    const detail=document.createElement("details"),summary=document.createElement("summary"),list=document.createElement("ol");
+    summary.textContent=`Review findings (${screen.findings.length})`;
+    for(const f of screen.findings) {
+      const li=document.createElement("li"),label=document.createElement("strong"),message=document.createElement("p");
+      label.textContent=f.code;message.textContent=f.message;li.append(label,message);
+      if(f.evidence){const evidence=document.createElement("p");evidence.className="finding-evidence";evidence.textContent=f.evidence;li.append(evidence);}
+      list.append(li);
+    }
+    detail.append(summary,list);section.append(heading,statusText,metrics,basis,detail);host.append(section);
+  }
+}
 function renderStandards(report) {
+  renderStandardScreens(report);
   renderConformity(report?.conformity);
   $("#standards-report").hidden = !report;
   $("#standard-findings").replaceChildren();
@@ -141,7 +168,7 @@ function renderLedger() {
   changes.append(fragment);
   $("#more-changes").hidden = list.length <= ledgerLimit;
   $("#more-changes").textContent = `Show more changes (${Math.min(ledgerLimit, list.length)} of ${list.length})`;
-  $("#ledger-choice").textContent = `Changes for variation ${(latest?.selected ?? 0)+1}. Phrase edits and sentence moves are included.`;
+  $("#ledger-choice").textContent = current()?.result.standards ? `Changes for the ${STANDARD_NAMES[current().options.profile]} draft. ${current().options.profile === "combined" ? "Both checks use this same text." : "The review uses this same text."}` : `Changes for variation ${(latest?.selected ?? 0)+1}. Phrase edits and sentence moves are included.`;
 }
 function select(index) {
   if (!current(index)) return;
@@ -242,6 +269,15 @@ function schedule() {
   status.textContent = "Text changed; preparing new variations...";
   window.clearTimeout(timer); timer = window.setTimeout(runRewrite, 180);
 }
+function restructureForBoth() {
+  // The button explicitly selects a preset; never use a generated variation as
+  // the next source, and never erase the user's protected terms or reader data.
+  $("#profile").value="combined";
+  $("#arrange").checked=$("#structured-lists").checked=$("#require-conformity").checked=true;
+  $("#check-only").checked=false;
+  updateMode();requestRewrite();
+}
+$("#both-standards").addEventListener("click",restructureForBoth);
 source.value = SAMPLE;
 source.addEventListener("input", schedule);
 for (const control of [seed, intensity, $("#synonyms"), $("#arrange"), $("#quotes"), $("#protected")]) control.addEventListener("input", schedule);
@@ -307,6 +343,7 @@ grid.addEventListener("click", (event) => {
   if (button.dataset.action === "download") saveText(index, `synomizer-variation-${index+1}.txt`);
   if (button.dataset.action === "json") saveReport(index, `synomizer-variation-${index+1}.json`);
   if (button.dataset.action === "review") { select(index); $("#ledger-heading").focus(); }
+  if (button.dataset.action === "both") restructureForBoth();
 });
 $("#import").addEventListener("click", () => $("#file").click());
 $("#file").addEventListener("change", async () => {

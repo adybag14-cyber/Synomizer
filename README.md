@@ -24,11 +24,21 @@ Text is processed locally in the browser. There are no accounts, analytics, exte
 
 The browser implementation is JavaScript, **not a native C++ executable or WebAssembly build**. It mirrors the C++ reference rules and reads the same versioned data files. Cross-engine tests compare both rewritten text and complete change records, including full-width 64-bit seeds.
 
-## Standards conversion and guarded release (1.5.0)
+## Standards conversion and guarded release (1.5.1)
 
-Choose **ASD-STE100 authoring aid**, **ISO 24495-1 plain-language aid**, or **STE + plain-language aid**. The standards path returns one deterministic draft and a structured report, not three synonymous alternatives. No transformer, language model, WebGPU inference or external rewriting service is used.
+Choose **ASD-STE100 authoring aid**, **ISO 24495-1 plain-language aid**, or **Both: ASD-STE100 + ISO 24495-1**. The standards path returns one deterministic draft and a structured report, not three synonymous alternatives. No transformer, language model, WebGPU inference or external rewriting service is used.
 
 **This release does not guarantee conformity for arbitrary text.** It distinguishes generating a draft from releasing text as conformant. Rule coverage, short sentences, a matching glossary and a matching hash do not establish correct meaning, approved word senses or reader usability.
+
+### One draft, both standards
+
+The **Restructure for both standards** button is visible directly below the main toolbar, even while **Three variations** is selected. The Restructured comparison card also has **Use both standards**. Both routes use the original source, not a previously generated variation. The preset selects `combined`, turns on sentence/list restructuring and strict export, and turns off check-only. It preserves reader/task fields, text type, vocabulary, quotation settings, word-edit choice and protected terms.
+
+The two standards can be applied together: ISO's official scope expressly includes technical writing and controlled languages. Their compatibility is not an implication of conformity. STE's controlled vocabulary and construction requirements and ISO's reader-centred principles still need their own assessment. See [ISO's scope](https://www.iso.org/standard/78907.html), [ASD's explanation](https://www.asd-ste100.org/about_STE.html), and [ASD's tool guidance](https://www.asd-ste100.org/STEsoftware.html).
+
+The same final draft now has **two separately labelled review views**, included in browser and native JSON as `standards.screens`. Both include the same draft SHA-256. They expose their own metrics, length-screen basis, target and findings. STE grouping cannot hide an ISO-oriented ordinary-word concern, and ISO's advisory 25-word screen is not presented as an ISO requirement. The ordinary single-standard modes each return just their own review view. Neither view marks unverified requirements as passed; the existing strict release gate remains in force.
+
+This is not a pipeline that applies a second paraphrase after the first, nor a claim that ordinary **Three variations / Restructured** is automatically standards-conforming. The combined mode uses the controlled drafting path without synonym-diversity search. `--profile combined` in the C++ CLI exposes the same two-view report.
 
 ### Expanded model-free conversion
 
@@ -58,7 +68,7 @@ The CLI enables the equivalent opt-in gate with `--require-conformity`. A blocke
 ./build/synomizer --profile plain --check-only input.txt
 ```
 
-**There is deliberately no automatic approval path in 1.5.0.** The report always identifies conformity as unverified. It includes all 53 ASD-STE100 Issue 9 rule identifiers where STE is selected, plus four ISO principle-level review entries where plain language is selected. The ISO entries are not a complete enumeration of the standard's detailed guidelines. Every entry states `not-verified` or requests attention; an unimplemented check cannot silently pass. Hashes bind the normalized source and draft bytes, not a signature, identity, approval or semantic proof.
+**There is deliberately no automatic approval path in 1.5.1.** The report always identifies conformity as unverified. It includes all 53 ASD-STE100 Issue 9 rule identifiers where STE is selected, plus four ISO principle-level review entries where plain language is selected. The ISO entries are not a complete enumeration of the standard's detailed guidelines. Every entry states `not-verified` or requests attention; an unimplemented check cannot silently pass. Hashes bind the normalized source and draft bytes, not a signature, identity, approval or semantic proof.
 
 ### Authoring context and terminology
 

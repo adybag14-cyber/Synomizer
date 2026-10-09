@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.1 - 2026-10-09
+
+- Make combined restructuring discoverable: a visible toolbar shortcut and an action on the Restructured card select both ASD-STE100 and ISO 24495-1. Both start from the unchanged original rather than feeding back a generated variant, preserve terminology/reader settings and enable strict export.
+- Add independent STE and ISO-oriented review screens for one identical draft in native/browser reports. Bind both to the draft digest and keep grouped STE counts separate from the application's ordinary-word advisory screen. Neither view certifies conformity.
+- Name both standards explicitly in the selector and result, and document compatibility using ISO's controlled-language scope. Preserve the separate three-variation workflow, protected text and check-only/export controls.
+- Add native, parity and browser regressions for dual review, different counting targets, source preservation, keyboard access and narrow layouts.
+
 ## 1.5.0 - 2026-10-08
 
 - Expand deterministic standards drafts with guarded descriptive clause separation and optional vertical nominal lists. Preserve reporting context, item order, conjunctions and protected text; reject ambiguous shared-head or scoped constructions.
