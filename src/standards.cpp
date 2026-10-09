@@ -72,18 +72,22 @@ void validate(const Options& o) {
 struct Vocabulary {
   std::unordered_map<std::string,std::vector<Tokens>> protected_index;
   std::unordered_set<std::string> spellings;
+  std::unordered_map<std::string,std::vector<Tokens>> counting_names;
   explicit Vocabulary(const Options& options) {
     for(const auto& e:options.vocabulary) {
       auto t=tokenize(trim(e.term));
       spellings.insert(lower_copy(trim(e.term)));
+      if((e.category=="name"||e.category=="title")&&!t.empty())counting_names[lower_copy(t.front().text)].push_back(t);
       if(e.category!="general" && !t.empty()) protected_index[lower_copy(t.front().text)].push_back(std::move(t));
     }
+    for(auto& [key,patterns]:counting_names){(void)key;std::stable_sort(patterns.begin(),patterns.end(),[](const auto& a,const auto& b){return a.size()>b.size();});}
     for(auto& [key,patterns]:protected_index) {
       (void)key;
       std::stable_sort(patterns.begin(),patterns.end(),[](const auto& a,const auto& b){return a.size()>b.size();});
     }
   }
-  void freeze(Tokens& t) const {
+  bool freeze(Tokens& t) const {
+    bool matched=false;
     for(std::size_t i=0;i<t.size();++i) {
       const auto found=protected_index.find(lower_copy(t[i].text));
       if(found==protected_index.end()) continue;
@@ -92,19 +96,21 @@ struct Vocabulary {
         bool match=true;
         for(std::size_t k=0;k<pattern.size();++k)
           if(!(space(pattern[k]) && space(t[i+k])) && lower_copy(t[i+k].text)!=lower_copy(pattern[k].text)) {match=false;break;}
-        if(match) { for(std::size_t k=0;k<pattern.size();++k) t[i+k].frozen=true; i+=pattern.size()-1; break; }
+        if(match) { matched=true; for(std::size_t k=0;k<pattern.size();++k) t[i+k].frozen=true; i+=pattern.size()-1; break; }
       }
     }
+    return matched;
   }
 };
-void prepare(Tokens& t,const Options& o,const Vocabulary& vocabulary) {
+bool prepare(Tokens& t,const Options& o,const Vocabulary& vocabulary) {
   // Scanner freezes apostrophes. Unfreeze only explicit unambiguous contractions,
   // then restore quotation, name, fixed-expression and user protection.
   for(auto& token:t) for(const auto& rule:lexicon().clarity_rules)
     if(rule.guard=="contraction" && rule.source.size()==1 && lower_copy(token.text)==rule.source[0]) token.frozen=false;
   freeze_tokens(t,o.protect_quotes,true,true);
-  vocabulary.freeze(t);
+  const bool matched=vocabulary.freeze(t);
   (void)freeze_terms(t,o.protected_terms);
+  return matched;
 }
 const std::unordered_map<std::string,std::string>& past_verbs() {
   static const std::unordered_map<std::string,std::string> forms={
@@ -255,16 +261,87 @@ void simplify(Tokens& t,std::vector<Change>& changes) {
   }
   t=std::move(out);
 }
+// Read supported list/step markers for count screening only; source text is never edited here.
+std::vector<Piece> count_pieces(std::string_view text) {
+  std::vector<Piece> out;std::string pending;
+  const auto flush=[&]{for(auto& p:split_pieces(pending))out.push_back(std::move(p));pending.clear();};
+  std::size_t begin=0;
+  while(begin<text.size()) {
+    auto end=text.find('\n',begin);if(end==std::string_view::npos)end=text.size();
+    auto line=trim(std::string(text.substr(begin,end-begin)));std::size_t marker=0;
+    if(line.size()>2 && in(line.substr(0,1),{"-","*","+"}) && line[1]==' ')marker=2;
+    else {
+      std::size_t n=0;while(n<line.size() && line[n]>='0' && line[n]<='9')++n;
+      if(n && n+1<line.size() && (line[n]=='.'||line[n]==')') && line[n+1]==' ')marker=n+2;
+    }
+    if(line.empty()){flush();}
+    else if(marker){flush();for(auto& p:split_pieces(line.substr(marker)))out.push_back(std::move(p));}
+    else {if(!pending.empty())pending+='\n';pending+=line;}
+    begin=end==text.size()?end:end+1;
+  }
+  flush();return out;
+}
+
+struct GroupedCount {std::size_t words=0;std::vector<std::size_t> nested;};
+GroupedCount count_grouped(const Tokens& t,const Vocabulary& vocabulary,int depth=0) {
+  if(depth>16)return {count(t),{}};
+  // Match delimiters once. Repeated unmatched parentheses must not cause
+  // a full-suffix scan at every token in arbitrary input.
+  const auto missing=t.size();
+  std::vector<std::size_t> ends(t.size(),missing),paren;
+  std::size_t quote=missing;std::string quote_end;
+  for(std::size_t i=0;i<t.size();++i) {
+    const auto& w=t[i].text;
+    if(quote!=missing) {if(w==quote_end){ends[quote]=i;quote=missing;}continue;}
+    if(in(w,{"\"","'","\xE2\x80\x9C","\xE2\x80\x98"})) {quote=i;quote_end=w=="\xE2\x80\x9C"?"\xE2\x80\x9D":w=="\xE2\x80\x98"?"\xE2\x80\x99":w;continue;}
+    if(w=="(")paren.push_back(i);
+    else if(w==")"&&!paren.empty()){ends[paren.back()]=i;paren.pop_back();}
+  }
+  GroupedCount result;
+  auto& n=result.words;
+  for(std::size_t i=0;i<t.size();++i) {
+    const auto& token=t[i];
+    if(ends[i]!=missing){
+      ++n;
+      if(token.text=="(") {
+        const auto inner=count_grouped(Tokens(t.begin()+static_cast<std::ptrdiff_t>(i+1),t.begin()+static_cast<std::ptrdiff_t>(ends[i])),vocabulary,depth+1);
+        if(inner.words>1)result.nested.push_back(inner.words);
+        result.nested.insert(result.nested.end(),inner.nested.begin(),inner.nested.end());
+      }
+      i=ends[i];continue;
+    }
+    bool named=false;
+    if(const auto found=vocabulary.counting_names.find(lower_copy(token.text));found!=vocabulary.counting_names.end()) {
+      for(const auto& pattern:found->second) {
+        if(pattern.size()>t.size()-i)continue;
+        bool match=true;
+        for(std::size_t k=0;k<pattern.size();++k)if(!(space(pattern[k])&&space(t[i+k])) && lower_copy(pattern[k].text)!=lower_copy(t[i+k].text)){match=false;break;}
+        if(match){++n;i+=pattern.size()-1;named=true;break;}
+      }
+    }
+    if(named)continue;
+    if(!token.word && !(token.frozen&&!space(token)))continue;
+    ++n;
+    bool number=!token.text.empty() && std::ranges::any_of(token.text,[](unsigned char c){return c>='0'&&c<='9';}) &&
+      std::ranges::all_of(token.text,[](unsigned char c){return (c>='0'&&c<='9')||c=='.'||c=='-'||c=='+';});
+    if(number && i+2<t.size() && space(t[i+1])) {
+      const auto unit=lower_copy(t[i+2].text);
+      if(in(unit,{"bar","kg","mg","g","ml","mm","cm","km","m","s","ms","kpa","mpa","psi","volts","amps","ohms","kilograms","grams","liters","litres","meters","metres","seconds","minutes","hours","\xC2\xB0\x63","\xC2\xB0\x66"}) || in(t[i+2].text,{"A","V","W","L","mA","kV"}))i+=2;
+      else if(unit=="degrees" && i+4<t.size() && space(t[i+3]) && in(lower_copy(t[i+4].text),{"celsius","fahrenheit"}))i+=4;
+    }
+  }
+  return result;
+}
 StandardMetrics audit(std::string_view text,const Options& o,const Vocabulary& vocabulary,std::vector<StandardFinding>* findings) {
   StandardMetrics metrics;
   std::set<std::string> unknown;
   const auto add=[&](std::string code,std::string severity,std::string message,std::string excerpt,std::size_t sentence) {
     if(findings && findings->size()<250) findings->push_back({std::move(code),std::move(severity),std::move(message),std::move(excerpt),sentence});
   };
-  for(auto& piece:split_pieces(text)) {
+  for(auto& piece:count_pieces(text)) {
     if(!piece.sentence) continue;
-    auto tokens=piece.tokens; const auto n=count(tokens); if(!n) continue;
-    ++metrics.sentences; metrics.words+=n;metrics.longest_sentence=std::max(metrics.longest_sentence,n);
+    auto tokens=piece.tokens; const auto grouping=count_grouped(tokens,vocabulary); const auto n=ste(o)?grouping.words:count(tokens); if(!n) continue;
+    ++metrics.sentences; metrics.words+=count(tokens);metrics.longest_sentence=std::max(metrics.longest_sentence,n);
     const auto p=positions(tokens);
     const bool note=!p.empty() && lower_copy(tokens[p[0]].text)=="note";
     const auto limit=ste(o) && o.text_type=="procedure" && !note ? 20u : 25u;
@@ -272,12 +349,18 @@ StandardMetrics audit(std::string_view text,const Options& o,const Vocabulary& v
       ++metrics.long_sentences;
       add(ste(o)?(limit==20?"STE-5.1":"STE-6.3"):"PL-SENTENCE","review",std::to_string(n)+" screening words exceed the "+std::to_string(limit)+"-word target. Review grouping and sentence structure.",evidence(tokens),metrics.sentences);
     }
+    if(ste(o)) for(const auto inner:grouping.nested) {
+      ++metrics.sentences;metrics.longest_sentence=std::max(metrics.longest_sentence,inner);
+      if(inner>limit){++metrics.long_sentences;add("STE-8.5","review","A parenthetical inner count unit exceeds the selected target. Review both the inner content and its containing sentence.",evidence(tokens),metrics.sentences);}
+    }
     if(possible_passive(tokens)) {
       ++metrics.possible_passives;
       const auto message=!ste(o)?"Possible passive construction. Review whether the reader needs the actor or the result in focus; do not invent an actor.":o.text_type=="procedure"?"Possible passive construction. Confirm the action and responsible actor; do not invent an agent.":"Possible passive construction. For STE descriptions, an unknown agent can justify the passive.";
       add(ste(o)?"STE-3.6":"PL-ACTIVE","review",message,evidence(tokens),metrics.sentences);
     }
     prepare(tokens,o,vocabulary);
+    if(ste(o) && std::ranges::any_of(tokens,[](const auto& t){return !t.frozen && t.text==";";})) add("STE-8.1","review","A semicolon remains. Separate the statements only after their scope and relationship are clear.",evidence(tokens),metrics.sentences);
+    if(ste(o) && std::ranges::any_of(tokens,[](const auto& t){return t.text=="(";})) add("STE-8.5","review","Parenthetical content is grouped in the outer count; supported inner units are screened separately. Review nested, multi-sentence or complex cases and the permitted use of parentheses.",evidence(tokens),metrics.sentences);
     const bool coordinated=std::ranges::any_of(tokens,[](const auto& x){return x.text=="," || x.text==";";}) &&
       std::ranges::any_of(tokens,[](const auto& x){return x.text==";" || in(lower_copy(x.text),{"and","but"});});
     if(coordinated && !split_independent(tokens)) add("CLARITY-SCOPE","review","Coordinated, reported or protected material was not automatically split. Review attribution, conditions and the scope of each clause before separating it.",evidence(tokens),metrics.sentences);
@@ -336,14 +419,15 @@ Result rewrite_standard(std::string_view input,const Options& options) {
   const auto source=normalized(input);
   Result result;
   for(auto& piece:split_pieces(source)) {
-    if(!piece.sentence) {result.text+=piece.text;continue;}
+    if(!piece.sentence) {if(!result.text.ends_with("\n\n") || piece.text.find_first_not_of(" \t")!=std::string::npos) result.text+=piece.text;continue;}
     auto tokens=piece.tokens;
-    prepare(tokens,options,vocabulary);
-    const bool locked=freeze_terms(tokens,options.protected_terms);
+    const bool vocabulary_locked=prepare(tokens,options,vocabulary);
+    const bool locked=freeze_terms(tokens,options.protected_terms) || vocabulary_locked;
     if(!options.check_only) {
       if(options.arrange && !locked) {
         auto arranged=active_past(tokens);
         if(!arranged) arranged=split_independent(tokens);
+        if(!arranged) arranged=standard_structure(tokens,options.structured_lists);
         if(arranged) {
           tokens=std::move(arranged->tokens);result.changes.push_back(std::move(arranged->change));
           prepare(tokens,options,vocabulary);
@@ -353,12 +437,15 @@ Result rewrite_standard(std::string_view input,const Options& options) {
     }
     result.text+=concat_tokens(tokens);
   }
+  const bool rolled_back=source_anchors(source)!=source_anchors(result.text);
+  if(rolled_back){result.text=source;result.changes.clear();}
   StandardsReport report;
   report.profile=options.profile;report.text_type=options.text_type;
   report.audience=options.audience;report.purpose=options.purpose;
   report.sentence_target=ste(options) && options.text_type=="procedure" ? 20 : 25;
   report.vocabulary_entries=options.vocabulary.size();
   const auto add=[&](std::string code,std::string message) {report.findings.push_back({std::move(code),"review",std::move(message),"",0});};
+  if(rolled_back) add("CONVERSION-ROLLBACK","A numeric or logical marker changed. All draft edits were rolled back; review the original. Marker matching alone never proves equivalent meaning.");
   add("AUTHOR-REVIEW","No complete conformance or semantic-equivalence assessment was performed. Check facts, actors, quantities, conditions, negation and obligations against the source.");
   add("COUNT-SCOPE","Word counts are screening estimates, not the full ASD-STE100 section 8 counting method. Review names, labels, quotations, measurements, parentheses and lists. ISO 24495-1 does not impose this application's 25-word heuristic.");
   if(ste(options)) {
@@ -375,6 +462,7 @@ Result rewrite_standard(std::string_view input,const Options& options) {
   report.after=audit(result.text,options,vocabulary,&report.findings);
   if(report.findings.size()==250) report.findings.push_back({"REPORT-LIMIT","review","The on-screen/exported finding list is capped at 250 entries. Metrics cover the complete input; review the full document.","",0});
   result.standards=std::move(report);
+  assess_conformity(source,options,result);
   return result;
 }
 } // namespace synomizer

@@ -18,6 +18,7 @@ std::string_view version() noexcept {
 Result rewrite(std::string_view input, const Options& options) {
   if (options.profile != "variation") return rewrite_standard(input, options);
   if (options.check_only) throw std::invalid_argument("check-only requires a standards profile");
+  if (options.require_conformity) throw std::invalid_argument("require-conformity requires a standards profile");
   Options settings = options;
   if (settings.intensity < 0) {
     settings.intensity = 0;

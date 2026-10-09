@@ -307,3 +307,5 @@ button:disabled:hover { background: var(--ink); color: var(--paper); border-colo
 #standard-findings p { margin: 0.3rem 0; }
 .finding-evidence { border-left: 3px solid var(--line); padding-left: 0.6rem; }
 @media (max-width: 700px) { .standard-fields { grid-template-columns: 1fr; } }
+
+#conformity-panel{margin:1.2rem 0;padding:1rem;border:1px solid currentColor} #conformity-binding{overflow-wrap:anywhere} #conformity-blockers{padding-left:1.4rem} .coverage-scroll{overflow:auto} #rule-coverage{border-collapse:collapse;width:100%;font-size:.9rem} #rule-coverage th,#rule-coverage td{padding:.5rem;text-align:left;border-bottom:1px solid currentColor;overflow-wrap:anywhere}

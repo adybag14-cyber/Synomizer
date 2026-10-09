@@ -45,7 +45,7 @@ test('chosen option drives copy, download and complete change ledger',async({pag
 test('download all exports every variant plus selection and source',async({page})=>{
   await ready(page);await page.getByRole('radio').nth(2).click();
   const saved=await download(page,'#export-all');expect(saved.name).toBe('synomizer-variations.json');
-  const batch=JSON.parse(saved.text);expect(batch.version).toBe('1.4.1');expect(batch.selected).toBe(3);
+  const batch=JSON.parse(saved.text);expect(batch.version).toBe('1.5.0');expect(batch.selected).toBe(3);
   expect(batch.requested).toBe(3);expect(batch.attempts).toBeLessThanOrEqual(12);
   expect(batch.original).toBe(await page.locator('#source').inputValue());
   expect(batch.variants.map(v=>v.text)).toEqual(await page.locator('.variant-output').allTextContents());
