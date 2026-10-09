@@ -3,7 +3,7 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 async function ready(page) {
-  await page.goto('./');
+  await page.goto('./'); await page.locator("#profile").selectOption("variation");
   await expect(page.locator('#status')).toContainText('seed 1');
   await expect(page.locator('.variant-card:visible')).toHaveCount(3);
 }
@@ -45,7 +45,7 @@ test('chosen option drives copy, download and complete change ledger',async({pag
 test('download all exports every variant plus selection and source',async({page})=>{
   await ready(page);await page.getByRole('radio').nth(2).click();
   const saved=await download(page,'#export-all');expect(saved.name).toBe('synomizer-variations.json');
-  const batch=JSON.parse(saved.text);expect(batch.version).toBe('1.5.1');expect(batch.selected).toBe(3);
+  const batch=JSON.parse(saved.text);expect(batch.version).toBe('1.6.0');expect(batch.selected).toBe(3);
   expect(batch.requested).toBe(3);expect(batch.attempts).toBeLessThanOrEqual(12);
   expect(batch.original).toBe(await page.locator('#source').inputValue());
   expect(batch.variants.map(v=>v.text)).toEqual(await page.locator('.variant-output').allTextContents());
@@ -72,7 +72,7 @@ test('edits and invalid input clear all old options and batch exports',async({pa
   await expect(page.getByRole('radio').first()).toBeChecked();
 });
 test('every option protects terms, quoted words and URLs',async({page})=>{
-  await ready(page);await page.locator('summary').click();
+  await ready(page);await page.locator('details.advanced > summary').click();
   await page.locator('#protected').fill('clear explanation');
   const text='The teacher gave a clear explanation. She said "the happy child". Read https://happy.example/car. They purchased a small car.';
   await rewrite(page,text);

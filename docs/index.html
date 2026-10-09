@@ -15,13 +15,14 @@
     <p class="kicker">C++23 · deterministic · Apache-2.0</p>
     <h1>Synomizer</h1>
     <p class="privacy">Local processing · No accounts · No text uploads</p>
-    <p class="deck">A different way to say it. Compare three ways to say it, with context-aware wording, phrase rewrites and conservative sentence moves.</p>
+    <p class="deck">Paste text for automatic standards-oriented drafting with inferred settings and optional on-device intelligence. Or compare three rule-based variations.</p>
   </header>
 
   <main>
     <form class="tools" id="tools">
       <label>Writing mode
         <select id="profile" name="profile">
+          <option value="auto" selected>Automatic: paste and rewrite</option>
           <option value="variation">Three variations</option>
           <option value="ste">ASD-STE100 authoring aid</option>
           <option value="plain">ISO 24495-1 plain-language aid</option>
@@ -56,17 +57,17 @@
     </div>
     <p id="mode-route" class="hint" aria-live="polite">Three variations is ordinary rewriting. Choose the button above for both standards.</p>
     <fieldset id="standard-options" class="standard-options" hidden>
-      <legend>Standards-oriented drafting, without a language model</legend>
+      <legend>Optional draft settings and overrides</legend>
       <p>These profiles produce one consistent draft, not random alternatives. They apply a limited set of clarity edits and report review items. They do not certify conformity or verify the meaning.</p>
       <div class="standard-fields">
         <label for="text-type">Text type
-          <select id="text-type"><option value="description">Description or explanation</option><option value="procedure">Procedure or instructions</option></select>
+          <select id="text-type"><option value="auto">Infer automatically</option><option value="description" selected>Description or explanation</option><option value="procedure">Procedure or instructions</option></select>
         </label>
         <label class="check"><input type="checkbox" id="check-only"> Check only: keep the text unchanged</label>
         <label class="check"><input type="checkbox" id="require-conformity" checked> Block text export until conformity is verified</label>
         <label class="check"><input type="checkbox" id="structured-lists" checked> Format supported enumerations as lists</label>
-        <label for="audience">Intended readers <input id="audience" type="text" placeholder="For example: newly trained maintenance staff" maxlength="500"></label>
-        <label for="purpose">What do readers need to do? <input id="purpose" type="text" placeholder="For example: identify the required inspection" maxlength="500"></label>
+        <label for="audience">Intended readers <input id="audience" type="text" placeholder="Leave blank for an inferred reader" maxlength="500"></label>
+        <label for="purpose">What do readers need to do? <input id="purpose" type="text" placeholder="Leave blank for an inferred purpose" maxlength="500"></label>
       </div>
       <label for="vocabulary">User-authorized vocabulary (optional TSV)</label>
       <textarea id="vocabulary" rows="3" spellcheck="false" aria-describedby="vocabulary-help" placeholder="term [tab] part of speech [tab] intended meaning [tab] category"></textarea>
@@ -89,6 +90,21 @@
     <section class="original-sheet">
       <div class="sheet-head"><h2>Original</h2><p id="source-count"></p></div>
       <textarea id="source" spellcheck="true" aria-label="Original text" aria-describedby="editor-help" placeholder="Paste your English text here..."></textarea>
+    </section>
+    <section id="automatic-options" class="automatic-options" aria-labelledby="automatic-heading">
+      <h2 id="automatic-heading">Paste your text. Let the engine set up the draft.</h2>
+      <p class="hint">Reader, purpose, text type and source terminology are inferred automatically for both standards. No form is required. The result is an unverified draft, not a compliance certificate.</p>
+      <div id="automatic-context" aria-live="polite"></div>
+      <button id="auto-overrides" type="button" class="secondary" aria-expanded="false" aria-controls="standard-options">Adjust optional settings</button>
+      <label class="check"><input id="auto-strict" type="checkbox"> Require verified export instead of downloading an unverified draft</label>
+      <details id="bonsai-options"><summary>Optional on-device intelligence: Bonsai 2 / WebGPU</summary>
+        <p class="hint">Bonsai 2 can propose more specific reader/task settings and review hints. Enabling it downloads a pinned external WebGPU runtime and about 5.95 GB of model weights from Hugging Face. The weights may be cached in this browser. Extra GPU and system memory are required. Your text is processed here, not uploaded. Model suggestions can be wrong and cannot approve either standard.</p>
+        <label class="check"><input id="bonsai-consent" type="checkbox"> Allow this runtime and model download on this device</label>
+        <button id="bonsai-load" type="button" disabled>Enable Bonsai 2 (~5.95 GB)</button>
+        <button id="bonsai-unload" type="button" class="secondary" disabled>Stop / unload</button>
+        <button id="bonsai-delete" type="button" class="secondary">Delete cached model</button>
+        <p id="bonsai-status" class="hint" role="status">Optional model not loaded. Automatic rule-based setup is available now.</p>
+      </details>
     </section>
     <section class="comparison" aria-labelledby="variations-heading">
       <div class="sheet-head"><h2 id="variations-heading">One original. Three possibilities.</h2></div>
@@ -172,8 +188,8 @@
   </main>
 
   <footer class="colophon">
-    <p>Review before using. Mechanical rewriting cannot guarantee identical meaning or perfect grammar. The C++23 command-line tool is the reference. This page runs the same rules in the browser. It is not a language model, and it does not claim a perfect paraphrase: metaphor, register, and the emphasis of a moved clause can still shift.</p>
-    <p>Version 1.5.1 · Apache-2.0 · Text and settings stay in memory and are not saved after a reload. This site uses no third-party fonts, analytics, or rewriting services.</p>
+    <p>Review before using. Mechanical rewriting cannot guarantee identical meaning or perfect grammar. The C++23 command-line tool is the reference. This page runs the same rules in the browser. The core rewrite is rule-based; optional Bonsai 2 supplies model-inferred context. Neither path claims a perfect paraphrase: metaphor, register, and the emphasis of a moved clause can still shift.</p>
+    <p>Version 1.6.0 · Apache-2.0 · Text and settings stay in memory and are not saved after a reload. Optional model weights can be cached after permission; prompts are not cached. This site uses no third-party fonts, analytics, or rewriting services.</p>
     <p><a href="https://github.com/adybag14-cyber/Synomizer">adybag14-cyber/Synomizer</a></p>
   </footer>
   <noscript><p class="banner">Synomizer needs JavaScript for the live rewrite.</p></noscript>

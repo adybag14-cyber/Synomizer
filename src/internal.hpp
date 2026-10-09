@@ -224,6 +224,8 @@ struct SubstituteOutcome {
 [[nodiscard]] Result rewrite_standard(std::string_view input, const Options& options);
 [[nodiscard]] std::string sha256_text(std::string_view text);
 [[nodiscard]] std::vector<std::string> source_anchors(std::string_view text);
+[[nodiscard]] std::size_t term_occurrences(std::string_view text, std::string_view term);
+void apply_auto_context(AutomaticContext& context, Options& options, std::string_view text);
 void assess_conformity(std::string_view source, const Options& options, Result& result);
 void fix_articles(std::vector<Token>& tokens, std::vector<Change>& changes);
 

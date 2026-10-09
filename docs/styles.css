@@ -323,3 +323,12 @@ button:disabled:hover { background: var(--ink); color: var(--paper); border-colo
 .standard-screen li { margin-bottom:.8rem; }
 .standard-screen li p { margin:.3rem 0; }
 @media(max-width:800px) { .standard-screen-grid { grid-template-columns:1fr; } .tools>label { min-width:0;max-width:100%; } }
+
+.automatic-options { border:1px solid var(--line);padding:1rem;margin:1rem 0; }
+.automatic-options h2 { font-size:1.3rem; }
+.auto-fields { display:grid;grid-template-columns:5.5rem minmax(0,1fr);gap:.3rem .7rem;font-size:.9rem; }
+.auto-fields dt { font-weight:bold; }.auto-fields dd { margin:0;overflow-wrap:anywhere; }
+#bonsai-options { margin-top:.8rem; }#bonsai-options summary { cursor:pointer; }
+#bonsai-options button { margin:.4rem .3rem .4rem 0;max-width:100%;white-space:normal; }
+.automatic-options .check { margin:.7rem 0; }.automatic-options>button {max-width:100%;white-space:normal;}
+@media(max-width:500px){.auto-fields{grid-template-columns:1fr;}.auto-fields dd{margin-bottom:.4rem;}}

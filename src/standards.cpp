@@ -413,7 +413,12 @@ std::vector<VocabularyEntry> parse_vocabulary(std::string_view tsv) {
   validate(options);return options.vocabulary;
 }
 
-Result rewrite_standard(std::string_view input,const Options& options) {
+Result rewrite_standard(std::string_view input,const Options& requested) {
+  auto options=requested;
+  std::optional<AutomaticContext> automatic;
+  const auto normalized_source=normalized(input);
+  if(options.auto_context){automatic=infer_context(normalized_source);apply_auto_context(*automatic,options,normalized_source);}
+  else if(options.auto_proposal)throw std::invalid_argument("Model context requires automatic setup");
   validate(options);
   const Vocabulary vocabulary(options);
   const auto source=normalized(input);
@@ -423,6 +428,7 @@ Result rewrite_standard(std::string_view input,const Options& options) {
     auto tokens=piece.tokens;
     const bool vocabulary_locked=prepare(tokens,options,vocabulary);
     const bool locked=freeze_terms(tokens,options.protected_terms) || vocabulary_locked;
+    if(automatic)(void)freeze_terms(tokens,automatic->terms);
     if(!options.check_only) {
       if(options.arrange && !locked) {
         auto arranged=active_past(tokens);
@@ -433,11 +439,13 @@ Result rewrite_standard(std::string_view input,const Options& options) {
           prepare(tokens,options,vocabulary);
         }
       }
+      if(automatic)(void)freeze_terms(tokens,automatic->terms);
       if(options.synonyms) simplify(tokens,result.changes);
     }
     result.text+=concat_tokens(tokens);
   }
-  const bool rolled_back=source_anchors(source)!=source_anchors(result.text);
+  const bool term_lost=automatic && std::ranges::any_of(automatic->terms,[&](const auto& term){return term_occurrences(result.text,term)<term_occurrences(source,term);});
+  const bool rolled_back=term_lost || source_anchors(source)!=source_anchors(result.text);
   if(rolled_back){result.text=source;result.changes.clear();}
   StandardsReport report;
   report.profile=options.profile;report.text_type=options.text_type;
@@ -445,6 +453,7 @@ Result rewrite_standard(std::string_view input,const Options& options) {
   report.sentence_target=ste(options) && options.text_type=="procedure" ? 20 : 25;
   report.vocabulary_entries=options.vocabulary.size();
   const auto add=[&](std::string code,std::string message) {report.findings.push_back({std::move(code),"review",std::move(message),"",0});};
+  if(automatic){report.automatic_context=*automatic;add("AUTO-CONTEXT","Reader, purpose, text type and source terms were proposed automatically. These are not confirmed reader needs, approved vocabulary or evidence that a standard is satisfied.");}
   if(rolled_back) add("CONVERSION-ROLLBACK","A numeric or logical marker changed. All draft edits were rolled back; review the original. Marker matching alone never proves equivalent meaning.");
   add("AUTHOR-REVIEW","No complete conformance or semantic-equivalence assessment was performed. Check facts, actors, quantities, conditions, negation and obligations against the source.");
   add("COUNT-SCOPE","Word counts are screening estimates, not the full ASD-STE100 section 8 counting method. Review names, labels, quotations, measurements, parentheses and lists. ISO 24495-1 does not impose this application's 25-word heuristic.");

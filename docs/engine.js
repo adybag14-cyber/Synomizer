@@ -1368,6 +1368,7 @@ function freezeTerms(tokens, terms) {
 }
 
 export function rewrite(input, options = {}, resources) {
+  if(options.autoContext && (options.profile??"variation")==="variation")throw new Error("Automatic setup requires a standards profile");
   if (typeof input !== "string") throw new TypeError("Input must be text.");
   if (!resources?.rows || !resources?.byLemma) throw new TypeError("Load the word lists before rewriting.");
   const rawSeed = options.seed ?? 1;

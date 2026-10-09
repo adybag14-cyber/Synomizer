@@ -8,7 +8,7 @@ const resources = loadResources(...["lexicon.tsv", "phrases.txt", "rephrases.tsv
   readFileSync(new URL(`../../data/${name}`, import.meta.url), "utf8")));
 const card = (page, index) => page.locator(`.variant-card[data-index="${index}"]`);
 async function loaded(page) {
-  await page.goto("./");
+  await page.goto("./"); await page.locator("#profile").selectOption("variation");
   await expect(page.locator("#status")).toContainText("seed 1");
   await expect(page.locator("#export-all")).toBeEnabled();
 }
@@ -110,7 +110,7 @@ test("unknown, one-choice and fully protected passages do not pretend to have th
 });
 
 test("all alternatives respect names, phrases, quotations and intensity without broader automatic escalation", async ({ page }) => {
-  await loaded(page); await page.locator("summary").click();
+  await loaded(page); await page.locator("details.advanced > summary").click();
   await page.locator("#protected").fill("in a careful manner\noriginal brand");
   await page.locator("#intensity").selectOption("0");
   const original = 'The happy teacher worked in a careful manner. The original brand was reliable. She said "The happy child." Visit https://happy.example/car. A healthy child was cheerful.';
@@ -162,7 +162,7 @@ test("overlapping new sets use the newest source and exact seed including uint64
 test("missing phrase dictionary disables generation and Retry reloads all three resources", async ({ page }) => {
   let broken = true;
   await page.route("**/data/rephrases.tsv", (route) => broken ? route.fulfill({ status: 503, body: "offline" }) : route.continue());
-  await page.goto("./");
+  await page.goto("./"); await page.locator("#profile").selectOption("variation");
   await expect(page.locator("#banner")).toContainText("word lists");
   await expect(page.locator("#export-all")).toBeDisabled();
   broken = false; await page.locator("#retry").click();

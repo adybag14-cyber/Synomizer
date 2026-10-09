@@ -54,7 +54,8 @@ Options:
       --variants N      Offer 1..3 distinct rewrites (default 1; no duplicates)
       --style NAME      Single-rewrite profile: balanced, close, or recast
       --profile NAME    variation (default), ste, plain, or combined; standards give one draft
-      --text-type NAME  description (default) or procedure; selects STE length screen
+      --auto-context    Infer reader, purpose, text type and source terminology; defaults to combined
+      --text-type NAME  description (default) or procedure; explicit override for automatic setup
       --require-conformity  Withhold text/output file and exit 3 unless conformity is established
       --no-structured-lists  Do not format supported enumerations as vertical lists
       --check-only      No edits; output JSON review report (requires standards profile)
@@ -128,6 +129,15 @@ std::string screens_json(const std::vector<synomizer::StandardScreen>& screens) 
   }
   return out+"]";
 }
+std::string context_field_json(const synomizer::ContextField& f){return "{\"value\":"+json_string(f.value)+",\"origin\":"+json_string(f.origin)+",\"evidence\":"+json_string(f.evidence)+"}";}
+std::string context_json(const synomizer::AutomaticContext& c){
+ auto out="{\"method\":"+json_string(c.method)+",\"status\":"+json_string(c.status)+",\"sourceSha256\":"+json_string(c.source_sha256)+",\"genre\":"+json_string(c.genre)+
+ ",\"fields\":{\"audience\":"+context_field_json(c.audience)+",\"purpose\":"+context_field_json(c.purpose)+",\"textType\":"+context_field_json(c.text_type)+"},\"terms\":[";
+ bool first=true;for(const auto& term:c.terms){if(!first)out+=',';first=false;out+=json_string(term);}out+="],\"warnings\":[";
+ first=true;for(const auto& w:c.warnings){if(!first)out+=',';first=false;out+=json_string(w);}out+="],\"reviewHints\":[";
+ first=true;for(const auto& h:c.review_hints){if(!first)out+=',';first=false;out+="{\"standard\":"+json_string(h.standard)+",\"note\":"+json_string(h.note)+",\"evidence\":"+json_string(h.evidence)+"}";}
+ return out+"],\"sampled\":"+(c.sampled?"true":"false")+"}";
+}
 std::string standards_json(const synomizer::StandardsReport& r) {
   auto out="{\"profile\":"+json_string(r.profile)+",\"textType\":"+json_string(r.text_type)+
     ",\"status\":"+json_string(r.status)+",\"audience\":"+json_string(r.audience)+",\"purpose\":"+json_string(r.purpose)+
@@ -141,7 +151,7 @@ std::string standards_json(const synomizer::StandardsReport& r) {
     out+="{\"code\":"+json_string(f.code)+",\"severity\":"+json_string(f.severity)+",\"message\":"+json_string(f.message)+
       ",\"evidence\":"+json_string(f.evidence)+",\"sentence\":"+std::to_string(f.sentence)+"}";
   }
-  return out+"],\"conformity\":"+conformity_json(r.conformity)+",\"screens\":"+screens_json(r.screens)+"}";
+  return out+"],\"conformity\":"+conformity_json(r.conformity)+",\"screens\":"+screens_json(r.screens)+(r.automatic_context?",\"automaticContext\":"+context_json(*r.automatic_context):"")+"}";
 }
 std::string to_json(const synomizer::Result& result, std::uint64_t seed, synomizer::Style style) {
   std::string out = "{\"version\":" + json_string(synomizer::version()) + ",\"seed\":" + json_string(std::to_string(seed)) +
@@ -161,6 +171,7 @@ int run(const std::vector<std::string>& args) {
   synomizer::Options options;
   std::size_t count = 1;
   bool show_changes=false, json=false, have_text=false, have_file=false, positional=false;
+  bool profile_given=false,text_type_given=false;
   std::string input_path, output_path, inline_text, mode, vocabulary_path;
   for (std::size_t i=1; i<args.size(); ++i) {
     const auto& arg=args[i];
@@ -175,15 +186,16 @@ int run(const std::vector<std::string>& args) {
       if (arg=="--show-changes") { show_changes=true; continue; }
       if (arg=="--json") { json=true; continue; }
       if (arg=="--profile") {
-        options.profile=value();
+        options.profile=value();profile_given=true;
         if (options.profile!="variation" && options.profile!="ste" && options.profile!="plain" && options.profile!="combined") throw std::runtime_error("profile must be variation, ste, plain, or combined");
         continue;
       }
       if (arg=="--text-type") {
-        options.text_type=value();
+        options.text_type=value();text_type_given=true;
         if (options.text_type!="description" && options.text_type!="procedure") throw std::runtime_error("text type must be description or procedure");
         continue;
       }
+      if (arg=="--auto-context") { options.auto_context=true;continue; }
       if (arg=="--check-only") { options.check_only=true; json=true; continue; }
       if (arg=="--require-conformity") { options.require_conformity=true; continue; }
       if (arg=="--no-structured-lists") { options.structured_lists=false; continue; }
@@ -233,6 +245,7 @@ int run(const std::vector<std::string>& args) {
     if (have_file) throw std::runtime_error("only one input file is allowed");
     input_path=arg; have_file=true;
   }
+  if(options.auto_context){if(!profile_given)options.profile="combined";if(!text_type_given)options.text_type="auto";}
   if (have_text && have_file) throw std::runtime_error("use either --text or a file, not both");
   if (mode=="--no-rewrite") { options.synonyms=false; options.arrange=false; }
   else if (mode=="--synonyms-only") options.arrange=false;

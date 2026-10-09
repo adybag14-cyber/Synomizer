@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Synomizer VERSION 1.5.1 LANGUAGES CXX)
+project(Synomizer VERSION 1.6.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -51,6 +51,7 @@ add_library(synomizer-lib STATIC
   src/adjuncts.cpp
   src/academic.cpp
   src/standards.cpp
+  src/auto_context.cpp
   src/standard_structure.cpp
   src/conformity.cpp
 )

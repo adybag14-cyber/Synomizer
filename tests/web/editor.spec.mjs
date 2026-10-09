@@ -3,7 +3,7 @@
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 async function loaded(page) {
-  await page.goto("./");
+  await page.goto("./"); await page.locator("#profile").selectOption("variation");
   await expect(page.locator("#status")).toContainText("seed 1");
   await expect(page.locator("#copy")).toBeEnabled();
 }
@@ -84,7 +84,7 @@ test("quotes, URLs and code survive while surrounding prose changes", async ({ p
 });
 test("protected terms and empty input", async ({ page }) => {
   await loaded(page);
-  await page.locator("summary").click();
+  await page.locator("details.advanced > summary").click();
   await page.locator("#protected").fill("happy\nchild\nbought\ncar");
   await input(page, "The happy child bought a car.");
   await expect(page.locator("#output")).toHaveText("The happy child bought a car.");
@@ -138,7 +138,7 @@ test("rapid edits do not publish an older rewrite", async ({ page }) => {
 test("small-screen layout has no horizontal overflow", async ({ page }, info) => {
   await loaded(page);
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.locator("summary").click();
+  await page.locator("details.advanced > summary").click();
   await page.locator("#protected").fill("a".repeat(200));
   await expect(page.locator("#status")).toContainText("seed");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
@@ -147,7 +147,7 @@ test("small-screen layout has no horizontal overflow", async ({ page }, info) =>
 test("word-list failure is actionable and retry recovers", async ({ page }) => {
   let fail = true;
   await page.route("**/data/lexicon.tsv", (route) => fail ? route.fulfill({ status: 503, body: "temporarily unavailable" }) : route.continue());
-  await page.goto("./");
+  await page.goto("./"); await page.locator("#profile").selectOption("variation");
   await expect(page.locator("#banner")).toContainText("word lists");
   await expect(page.locator("#copy")).toBeDisabled();
   await expect(page.locator("#retry")).toBeVisible();
