@@ -56,7 +56,9 @@ test('Bonsai stays unloaded without consent and missing WebGPU falls back to aut
 });
 test('consented model context can refine settings but never approve either standard',async({page})=>{
  await modelFixture(page);await loaded(page);await page.locator('#source').fill(research);await enable(page);
- await expect(page.locator('#automatic-context')).toContainText('Model-proposed readers');await settled(page);
+ try{await expect(page.locator('#automatic-context')).toContainText('Model-proposed readers');}
+ catch(error){console.error('Model handoff diagnostic:',await page.locator('#bonsai-status').textContent());throw error;}
+ await settled(page);
  const r=await report(page);expect(r.standards.automaticContext.method).toBe('bonsai2+rules-v1');expect(r.standards.automaticContext.fields.audience.origin).toBe('inferred-bonsai2');
  expect(r.standards.conformity.conformityVerified).toBe(false);expect(r.standards.vocabularyEntries).toBe(0);await expect(page.locator('#source')).toHaveValue(research);
  await page.locator('#bonsai-unload').click();await expect(page.locator('#automatic-context')).toContainText('Automatic rules');expect((await report(page)).standards.automaticContext.method).toBe('rules-v1');
@@ -123,4 +125,23 @@ test('the real model worker refuses changed remote code before any weights are r
  await page.locator('#source').fill(instructions);await settled(page);
  const r=await report(page);expect(r.standards.automaticContext.method).toBe('rules-v1');
  expect(r.text).toContain('Do not exceed 5 bar.');await expect(page.locator('#download')).toBeEnabled();
+});
+
+
+test('a quick model load consumes the pending debounce instead of analyzing the same source twice',async({page})=>{
+ await page.clock.install({time:new Date('2026-01-01T00:00:00Z')});
+ await page.addInitScript(()=>{
+  const NativeWorker=window.Worker;window.__modelAnalysisRequests=[];
+  window.Worker=class extends NativeWorker{
+   constructor(url,options){super(url,options);this.isContextWorker=String(url).includes('bonsai-worker.js');}
+   postMessage(data,...rest){if(this.isContextWorker&&data.type==='analyze')window.__modelAnalysisRequests.push({id:data.id,text:data.text});return super.postMessage(data,...rest);}
+  };
+ });
+ await modelFixture(page);await loaded(page);
+ await page.clock.pauseAt(new Date('2026-01-01T01:00:00Z'));
+ await page.locator('#source').fill(research);await enable(page);
+ await expect(page.locator('#automatic-context')).toContainText('Model-proposed readers');
+ await page.clock.runFor(1200);
+ expect(await page.evaluate(()=>window.__modelAnalysisRequests)).toHaveLength(1);
+ await expect(page.locator('#source')).toHaveValue(research);
 });

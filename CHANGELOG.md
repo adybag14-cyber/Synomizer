@@ -4,7 +4,7 @@
 
 - Make paste-only automatic drafting the default: infer provisional reader, purpose, type and source terms without requiring forms; retain explicit user overrides and provenance in native/browser reports. Add native `--auto-context`.
 - Integrate optional consented Bonsai 2 WebGPU context proposals using pinned, hash-checked upstream code and pinned weights, with no runtime/weights vendored. Validate bounded source-grounded data; never convert a model assertion into approval.
-- Add dedicated model-worker cancellation, deadlines, device-loss fallback, newest-request handling and namespaced cache deletion. Rule-based drafting remains available when the model is absent or fails.
+- Add dedicated model-worker cancellation, deadlines, device-loss fallback, newest-request handling and namespaced cache deletion. Consume the pending input debounce when the model becomes ready to avoid re-analyzing an unchanged source. Rule-based drafting remains available when the model is absent or fails.
 - Distinguish automatic unverified draft export from optional strict release. Preserve manual standards/three-variation paths and the existing no-conformity-certificate limitation.
 
 ## 1.5.1 - 2026-10-09

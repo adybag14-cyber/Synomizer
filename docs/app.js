@@ -423,7 +423,10 @@ const bonsai=new BonsaiClient({onStatus:state=>{
   $("#bonsai-load").disabled=!$("#bonsai-consent").checked||!["idle","failed"].includes(state.state);
 }});
 async function tryModelContext(){
-  if($("#profile").value!=="auto"||!source.value.trim()||source.value.length>MAX||!['ready','analyzing'].includes(bonsai.state))return;
+  // Loading can finish before the pending input debounce. Consume that timer
+  // and never queue a second inference for an already requested source.
+  window.clearTimeout(modelTimer);modelTimer=null;
+  if($("#profile").value!=="auto"||!source.value.trim()||source.value.length>MAX||source.value===lastModelText||!['ready','analyzing'].includes(bonsai.state))return;
   const text=source.value,id=++modelRequest;lastModelText=text;
   try{const result=await bonsai.analyze(text);if(id!==modelRequest||source.value!==text||$("#profile").value!=="auto")return;
     modelResult={text,proposal:validateProposal(result.proposal,text.replace(/\r\n?/g,"\n")),sampled:result.sampled===true};requestRewrite();
