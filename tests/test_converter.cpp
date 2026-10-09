@@ -18,6 +18,12 @@ int main() {
     expect(!c.release_allowed&&!c.conformity_verified&&c.decision=="blocked","no false release");
     expect(c.strict_requested&&c.invariant_check=="passed","requested gate and selected marker check");
     expect(c.requirements.size()==57,"53 STE references plus 4 ISO principles");
+    expect(r.standards->screens.size()==2,"combined exposes two review views");
+    if(r.standards->screens.size()==2) {
+      const auto& ste=r.standards->screens[0];const auto& plain=r.standards->screens[1];
+      expect(ste.profile=="ste"&&plain.profile=="plain","named target views");
+      expect(ste.draft_sha256==plain.draft_sha256&&ste.draft_sha256==c.draft_sha256,"both targets assess one exact draft");
+    }
     std::set<std::string> ids;
     for(const auto& row:c.requirements) {
       ids.insert(row.standard+"/"+row.rule);
@@ -46,5 +52,13 @@ int main() {
   std::string malformed;for(int i=0;i<16000;++i)malformed+="(word ";malformed+='.';
   r=rewrite(malformed,o);
   expect(r.text==malformed&&r.standards&&r.standards->after.longest_sentence==16000,"bounded unmatched-parenthesis counting");
+  o.profile="combined";o.text_type="procedure";o.check_only=true;
+  std::string boundary;for(int i=0;i<21;++i){if(i)boundary+=' ';boundary+="word";}boundary+='.';
+  r=rewrite(boundary,o);
+  expect(r.standards&&r.standards->screens.size()==2,"two target screens for procedure");
+  if(r.standards&&r.standards->screens.size()==2) {
+    expect(r.standards->screens[0].sentence_target==20&&r.standards->screens[1].sentence_target==25,"STE and advisory targets distinct");
+    expect(r.standards->screens[0].after.long_sentences==1&&r.standards->screens[1].after.long_sentences==0,"distinct length findings for the same text");
+  }
   return failures?1:0;
 }

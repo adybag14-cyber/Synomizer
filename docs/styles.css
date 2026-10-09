@@ -309,3 +309,17 @@ button:disabled:hover { background: var(--ink); color: var(--paper); border-colo
 @media (max-width: 700px) { .standard-fields { grid-template-columns: 1fr; } }
 
 #conformity-panel{margin:1.2rem 0;padding:1rem;border:1px solid currentColor} #conformity-binding{overflow-wrap:anywhere} #conformity-blockers{padding-left:1.4rem} .coverage-scroll{overflow:auto} #rule-coverage{border-collapse:collapse;width:100%;font-size:.9rem} #rule-coverage th,#rule-coverage td{padding:.5rem;text-align:left;border-bottom:1px solid currentColor;overflow-wrap:anywhere}
+
+/* Keep the combined path visible instead of hiding it only in a dropdown. */
+.standards-shortcut { display:flex;flex-wrap:wrap;gap:.8rem 1.2rem;align-items:center;border-block:1px solid color-mix(in srgb,var(--line) 30%,transparent);padding:.8rem 0;margin-top:.8rem; }
+.standards-shortcut .hint { flex:1 1 24rem;margin:0; }
+#both-standards { max-width:100%;white-space:normal;text-align:left; }
+#profile { max-width:100%; }
+.standard-screen-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin:1rem 0; }
+.standard-screen { min-width:0;border:1px solid var(--line);padding:1rem;overflow-wrap:anywhere; }
+.standard-screen h3 { margin:0 0 .5rem; }
+.standard-screen details { margin-top:.8rem; }
+.standard-screen summary { cursor:pointer; }
+.standard-screen li { margin-bottom:.8rem; }
+.standard-screen li p { margin:.3rem 0; }
+@media(max-width:800px) { .standard-screen-grid { grid-template-columns:1fr; } .tools>label { min-width:0;max-width:100%; } }

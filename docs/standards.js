@@ -1,5 +1,5 @@
 import { standardStructure } from "./standard-structure.js";
-import { assessConformity, sourceAnchors } from "./conformity.js";
+import { assessConformity, sourceAnchors, sha256Text } from "./conformity.js";
 // Copyright 2026 adybag14-cyber
 // SPDX-License-Identifier: Apache-2.0
 // Mirrors src/standards.cpp. A partial authoring aid, never a conformance certificate.
@@ -253,32 +253,32 @@ export function rewriteStandard(input, options, resources, h) {
     }
     return {words:n,nested};
   };
-  const audit = (text, findings = null) => {
+  const audit = (text, findings = null, review = o) => {
     const metrics = { sentences: 0, words: 0, longestSentence: 0, longSentences: 0, possiblePassives: 0, unlistedWords: 0 };
     const unknown = new Set();
     const add = (code, severity, message, excerpt, sentence) => { if (findings && findings.length < 250) findings.push({ code, severity, message, evidence: excerpt, sentence }); };
     for (const piece of countPieces(text)) {
       if (!piece.sentence) continue;
-      const t = piece.tokens.map(x => ({ ...x })), grouping=countGrouped(t), n = STE(o)?grouping.words:count(t); if (!n) continue;
+      const t = piece.tokens.map(x => ({ ...x })), grouping=countGrouped(t), n = STE(review)?grouping.words:count(t); if (!n) continue;
       metrics.sentences++; metrics.words += count(t); metrics.longestSentence = Math.max(metrics.longestSentence, n);
       const p = positions(t), note = p.length && lower(t[p[0]].text) === "note";
-      const limit = STE(o) && o.textType === "procedure" && !note ? 20 : 25;
+      const limit = STE(review) && review.textType === "procedure" && !note ? 20 : 25;
       if (n > limit) {
         metrics.longSentences++;
-        add(STE(o) ? (limit === 20 ? "STE-5.1" : "STE-6.3") : "PL-SENTENCE", "review", `${n} screening words exceed the ${limit}-word target. Review grouping and sentence structure.`, evidence(t), metrics.sentences);
+        add(STE(review) ? (limit === 20 ? "STE-5.1" : "STE-6.3") : "PL-SENTENCE", "review", `${n} screening words exceed the ${limit}-word target. Review grouping and sentence structure.`, evidence(t), metrics.sentences);
       }
-      if(STE(o))for(const inner of grouping.nested){
+      if(STE(review))for(const inner of grouping.nested){
         metrics.sentences++;metrics.longestSentence=Math.max(metrics.longestSentence,inner);
         if(inner>limit){metrics.longSentences++;add('STE-8.5','review','A parenthetical inner count unit exceeds the selected target. Review both the inner content and its containing sentence.',evidence(t),metrics.sentences);}
       }
       if (passive(t)) {
         metrics.possiblePassives++;
-        const message = !STE(o) ? "Possible passive construction. Review whether the reader needs the actor or the result in focus; do not invent an actor." : o.textType === "procedure" ? "Possible passive construction. Confirm the action and responsible actor; do not invent an agent." : "Possible passive construction. For STE descriptions, an unknown agent can justify the passive.";
-        add(STE(o) ? "STE-3.6" : "PL-ACTIVE", "review", message, evidence(t), metrics.sentences);
+        const message = !STE(review) ? "Possible passive construction. Review whether the reader needs the actor or the result in focus; do not invent an actor." : review.textType === "procedure" ? "Possible passive construction. Confirm the action and responsible actor; do not invent an agent." : "Possible passive construction. For STE descriptions, an unknown agent can justify the passive.";
+        add(STE(review) ? "STE-3.6" : "PL-ACTIVE", "review", message, evidence(t), metrics.sentences);
       }
       prepare(t);
-      if(STE(o)&&t.some(x=>!x.frozen&&x.text===';'))add('STE-8.1','review','A semicolon remains. Separate the statements only after their scope and relationship are clear.',evidence(t),metrics.sentences);
-      if(STE(o)&&t.some(x=>x.text==='('))add('STE-8.5','review','Parenthetical content is grouped in the outer count; supported inner units are screened separately. Review nested, multi-sentence or complex cases and the permitted use of parentheses.',evidence(t),metrics.sentences);
+      if(STE(review)&&t.some(x=>!x.frozen&&x.text===';'))add('STE-8.1','review','A semicolon remains. Separate the statements only after their scope and relationship are clear.',evidence(t),metrics.sentences);
+      if(STE(review)&&t.some(x=>x.text==='('))add('STE-8.5','review','Parenthetical content is grouped in the outer count; supported inner units are screened separately. Review nested, multi-sentence or complex cases and the permitted use of parentheses.',evidence(t),metrics.sentences);
       const coordinated = t.some(x => x.text === "," || x.text === ";") && t.some(x => x.text === ";" || ["and","but"].includes(lower(x.text)));
       if (coordinated && !splitIndependent(t)) add("CLARITY-SCOPE", "review", "Coordinated, reported or protected material was not automatically split. Review attribution, conditions and the scope of each clause before separating it.", evidence(t), metrics.sentences);
       let ing = false, contraction = false, complex = false;
@@ -298,10 +298,10 @@ export function rewriteStandard(input, options, resources, h) {
             j++;
           }
         }
-        if (STE(o) && o.vocabulary.length && !spellings.has(w)) unknown.add(w);
+        if (STE(review) && review.vocabulary.length && !spellings.has(w)) unknown.add(w);
       }
-      if (STE(o) && ing) add("STE-3.5", "review", "Review -ing forms: technical nouns/modifiers and some dictionary entries can be permitted; a suffix alone cannot decide.", evidence(t), metrics.sentences);
-      if (STE(o) && complex) add("STE-3.2", "review", "Review the auxiliary/tense construction without losing timing, modality or completed-action meaning.", evidence(t), metrics.sentences);
+      if (STE(review) && ing) add("STE-3.5", "review", "Review -ing forms: technical nouns/modifiers and some dictionary entries can be permitted; a suffix alone cannot decide.", evidence(t), metrics.sentences);
+      if (STE(review) && complex) add("STE-3.2", "review", "Review the auxiliary/tense construction without losing timing, modality or completed-action meaning.", evidence(t), metrics.sentences);
       if (contraction) add("CLARITY-CONTRACTION", "review", "Unresolved contraction: expand only after its meaning is clear.", evidence(t), metrics.sentences);
     }
     metrics.unlistedWords = unknown.size;
@@ -343,8 +343,27 @@ export function rewriteStandard(input, options, resources, h) {
     add("ISO-UNDERSTANDABLE", "Review terminology, explanations, sentence relationships and examples for the intended readers. Short words alone do not establish understanding.");
     add("ISO-USABLE", "Evaluate the document with representative readers and revise it using their results. No reader evaluation was performed by this tool.");
   }
+  const contextFindings=report.findings.slice();
   report.before = audit(source); report.after = audit(result.text, report.findings);
   if (report.findings.length === 250) report.findings.push({ code: "REPORT-LIMIT", severity: "review", message: "The on-screen/exported finding list is capped at 250 entries. Metrics cover the complete input; review the full document.", evidence: "", sentence: 0 });
+  const draftDigest=sha256Text(result.text);
+  report.screens=[];
+  for(const target of ['ste','plain']) {
+    if(o.profile!=='combined'&&o.profile!==target)continue;
+    const controlled=target==='ste';
+    const screen={standard:controlled?'ASD-STE100 Issue 9':'ISO 24495-1:2023',profile:target,
+      countingBasis:controlled?'STE grouped count screen; estimates, not full section 8 verification':'Ordinary-word clarity screen; the 25-word target is advisory, not an ISO requirement',
+      sentenceTarget:controlled&&o.textType==='procedure'?20:25,draftSha256:draftDigest,
+      status:'review-required',estimatedCounts:true};
+    const relevant=f=>controlled?!f.code.startsWith('ISO-'):!f.code.startsWith('STE-');
+    if(o.profile!=='combined'||controlled){screen.before=report.before;screen.after=report.after;screen.findings=report.findings.filter(relevant);}
+    else {
+      const review={...o,profile:target};screen.findings=contextFindings.filter(relevant);
+      screen.before=audit(source,undefined,review);screen.after=audit(result.text,screen.findings,review);
+      if(screen.findings.length===250)screen.findings.push({code:'REPORT-LIMIT',severity:'review',message:'The on-screen/exported finding list is capped at 250 entries. Metrics cover the complete input; review the full document.',evidence:'',sentence:0});
+    }
+    report.screens.push(screen);
+  }
   result.standards = report;
   assessConformity(source, o, result);
   return result;

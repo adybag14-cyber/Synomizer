@@ -108,6 +108,26 @@ std::string conformity_json(const synomizer::ConformityAssessment& c) {
   for(const auto& r:c.requirements){if(!first)out+=',';first=false;out+="{\"standard\":"+json_string(r.standard)+",\"rule\":"+json_string(r.rule)+",\"method\":"+json_string(r.method)+",\"result\":"+json_string(r.result)+",\"note\":"+json_string(r.note)+"}";}
   return out+"]}";
 }
+std::string screens_json(const std::vector<synomizer::StandardScreen>& screens) {
+  std::string out="[";bool first=true;
+  for(const auto& screen:screens) {
+    if(!first)out+=',';
+    first=false;
+    out+="{\"standard\":"+json_string(screen.standard)+",\"profile\":"+json_string(screen.profile)+
+      ",\"countingBasis\":"+json_string(screen.counting_basis)+",\"sentenceTarget\":"+std::to_string(screen.sentence_target)+
+      ",\"draftSha256\":"+json_string(screen.draft_sha256)+",\"status\":\"review-required\",\"estimatedCounts\":true,\"before\":"+metrics_json(screen.before)+
+      ",\"after\":"+metrics_json(screen.after)+",\"findings\":[";
+    bool first_finding=true;
+    for(const auto& f:screen.findings) {
+      if(!first_finding)out+=',';
+      first_finding=false;
+      out+="{\"code\":"+json_string(f.code)+",\"severity\":"+json_string(f.severity)+",\"message\":"+json_string(f.message)+
+        ",\"evidence\":"+json_string(f.evidence)+",\"sentence\":"+std::to_string(f.sentence)+"}";
+    }
+    out+="]}";
+  }
+  return out+"]";
+}
 std::string standards_json(const synomizer::StandardsReport& r) {
   auto out="{\"profile\":"+json_string(r.profile)+",\"textType\":"+json_string(r.text_type)+
     ",\"status\":"+json_string(r.status)+",\"audience\":"+json_string(r.audience)+",\"purpose\":"+json_string(r.purpose)+
@@ -121,7 +141,7 @@ std::string standards_json(const synomizer::StandardsReport& r) {
     out+="{\"code\":"+json_string(f.code)+",\"severity\":"+json_string(f.severity)+",\"message\":"+json_string(f.message)+
       ",\"evidence\":"+json_string(f.evidence)+",\"sentence\":"+std::to_string(f.sentence)+"}";
   }
-  return out+"],\"conformity\":"+conformity_json(r.conformity)+"}";
+  return out+"],\"conformity\":"+conformity_json(r.conformity)+",\"screens\":"+screens_json(r.screens)+"}";
 }
 std::string to_json(const synomizer::Result& result, std::uint64_t seed, synomizer::Style style) {
   std::string out = "{\"version\":" + json_string(synomizer::version()) + ",\"seed\":" + json_string(std::to_string(seed)) +
