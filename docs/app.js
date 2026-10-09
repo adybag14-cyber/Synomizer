@@ -1,9 +1,11 @@
+import {BonsaiClient} from "./bonsai-client.js";
+import {validateProposal} from "./auto-context.js";
 import { parseVocabulary } from "./standards.js";
 // Copyright 2026 adybag14-cyber
 // SPDX-License-Identifier: Apache-2.0
 const SAMPLE = "The careful teacher helped the happy children. Because the weather was cold, the class started the project late. She quietly explained the main idea, and the students were glad to assist. They purchased a small car for the school trip and quickly found the correct route. The calm physician said the tired boy was healthy. Although the journey was long, the group remained cheerful. The writer described the final result in an honest report. The crowd was silent when the meeting ended. The local students found a useful answer and remained calm. It was a small victory.";
 
-const VERSION = "1.5.1";
+const VERSION = "1.6.0";
 const $ = (selector) => document.querySelector(selector);
 const source = $("#source"), status = $("#status"), banner = $("#banner");
 const changes = $("#changes"), seed = $("#seed"), intensity = $("#intensity"), grid = $("#variations");
@@ -14,6 +16,7 @@ let worker, ready = false, busy = false, revision = 0, running = null, pending =
 let timer, deadline, latest = null, ledgerLimit = 250;
 let vocabularyImportRevision = 0;
 let importRevision = 0; // A newer file choice supersedes every older pending read.
+let showAutoOverrides=false,textTypeOverride=false,modelResult=null,modelTimer=null,modelRequest=0,lastModelText=null;
 const wordCount = (text) => (text.match(/\S+/g) || []).length;
 const escapeHtml = (text) => text.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
 function current(index = latest?.selected) {
@@ -70,14 +73,18 @@ function fail(message) {
 }
 const STANDARD_NAMES = { ste: "ASD-STE100 aid", plain: "Plain-language aid", combined: "ASD-STE100 + ISO 24495-1 restructuring aid" };
 function updateMode() {
-  const standard = $("#profile").value !== "variation";
-  $("#standard-options").hidden = !standard;
+  const automatic=$("#profile").value==="auto", standard = $("#profile").value !== "variation";
+  $("#automatic-options").hidden=!automatic;
+  $("#require-conformity").closest("label").hidden=automatic;
+  if(automatic&&!textTypeOverride)$("#text-type").value="auto";
+  if(!automatic&&$("#text-type").value==="auto")$("#text-type").value="description";
+  $("#standard-options").hidden = !standard || (automatic&&!showAutoOverrides);
   seed.disabled = intensity.disabled = $("#variant").disabled = standard;
-  $("#rewrite").textContent = standard ? ($("#check-only").checked ? "Check text" : "Create clarity draft") : "Create 3 variations";
+  $("#rewrite").textContent = automatic ? ($("#check-only").checked ? "Check automatically" : "Rewrite automatically") : standard ? ($("#check-only").checked ? "Check text" : "Create clarity draft") : "Create 3 variations";
   $("#variations-heading").textContent = standard ? "One source. One consistent draft." : "One original. Three possibilities.";
   $("#variation-guidance").hidden = standard;
   $("#word-operation-label").textContent = standard ? "Clarity word edits" : "Synonyms";
-  $("#mode-route").textContent = $("#profile").value === "combined" ?
+  $("#mode-route").textContent = automatic ? "Paste text to get one draft for both standards. Setup is inferred; the draft remains unverified." : $("#profile").value === "combined" ?
     "Both standards selected: one source draft is reviewed from STE and ISO plain-language perspectives. Neither review is an automatic approval." :
     standard ? `${STANDARD_NAMES[$("#profile").value]} selected. Use the combined shortcut to review both standards together.` :
     "Three variations is ordinary rewriting, including the Restructured choice. Use the combined shortcut above for both standards.";
@@ -120,6 +127,7 @@ function renderStandardScreens(report) {
   }
 }
 function renderStandards(report) {
+  renderAutomaticContext(report?.automaticContext);
   renderStandardScreens(report);
   renderConformity(report?.conformity);
   $("#standards-report").hidden = !report;
@@ -137,16 +145,27 @@ function renderStandards(report) {
   }
   $("#standard-findings").append(fragment);
 }
+function renderAutomaticContext(context) {
+  const host=$("#automatic-context");host.replaceChildren();if(!context)return;
+  const title=document.createElement("p");title.className="hint";title.textContent=`${context.method.startsWith("bonsai2")?"Bonsai 2 + rules":"Automatic rules"}: proposed setup, not verified. ${context.sampled?"The model used a bounded excerpt; the deterministic engine processes the full text.":""}`;host.append(title);
+  const list=document.createElement("dl");list.className="auto-fields";
+  for(const [key,label] of [["audience","Readers"],["purpose","Purpose"],["textType","Text type"]]){
+    const dt=document.createElement("dt"),dd=document.createElement("dd");dt.textContent=label;dd.textContent=`${context.fields[key].value} (${context.fields[key].origin})`;list.append(dt,dd);
+  }
+  host.append(list);const terms=document.createElement("p");terms.className="hint";terms.textContent=context.terms.length?`Preserving source terms: ${context.terms.join(", ")}. These are not approved dictionary entries.`:"No additional technical terms were inferred. Existing quotation and numeric protection remains active.";host.append(terms);
+  if(context.reviewHints.length){const details=document.createElement("details"),summary=document.createElement("summary");summary.textContent="Model review suggestions (unverified)";details.append(summary);for(const h of context.reviewHints){const p=document.createElement("p");p.textContent=`${h.standard}: ${h.note} Source: ${h.evidence}`;details.append(p);}host.append(details);}
+}
 function optionsFromForm() {
-  const standard = $("#profile").value !== "variation";
+  const automatic=$("#profile").value==="auto", standard = $("#profile").value !== "variation";
   const value = standard ? "1" : seed.value.trim();
   if (!/^[0-9]+$/.test(value) || value.length > 20 || BigInt(value) > MAX_SEED) throw new Error("Seed must be an unsigned 64-bit integer: 0 to 18446744073709551615.");
   const options = { seed: value, intensity: standard ? 1 : Number(intensity.value), synonyms: $("#synonyms").checked,
     arrange: $("#arrange").checked, protectQuotes: $("#quotes").checked,
     protectedTerms: $("#protected").value.split(/\r?\n/).map((term) => term.trim()).filter(Boolean) };
-  if (standard) Object.assign(options, { profile: $("#profile").value, textType: $("#text-type").value,
-    checkOnly: $("#check-only").checked, requireConformity: $("#require-conformity").checked, structuredLists: $("#structured-lists").checked, audience: $("#audience").value, purpose: $("#purpose").value,
+  if (standard) Object.assign(options, { profile: automatic?"combined":$("#profile").value, textType: automatic&&!textTypeOverride?"auto":$("#text-type").value,
+    checkOnly: $("#check-only").checked, requireConformity: automatic?$("#auto-strict").checked:$("#require-conformity").checked, structuredLists: $("#structured-lists").checked, audience: $("#audience").value, purpose: $("#purpose").value,
     vocabulary: parseVocabulary($("#vocabulary").value) });
+  if(automatic){options.autoContext=true;if(modelResult?.text===source.value){options.autoProposal=modelResult.proposal;options.autoSampled=modelResult.sampled;}}
   return options;
 }
 function renderLedger() {
@@ -207,6 +226,11 @@ function render(batch, request) {
     $("#variation-summary").textContent = request.options.checkOnly ? "Check only: no edits were made. Review the findings below." : "One deterministic clarity draft. No synonym diversity search was used; unresolved issues remain visible.";
     cards[0].querySelector(".variant-options").textContent = "Rule-based authoring aid / no language model / review required";
     status.textContent = `${STANDARD_NAMES[request.options.profile]} / ${request.options.checkOnly ? "checked without editing" : "draft ready"} / review required`;
+    if(request.options.autoContext){
+      cards[0].querySelector("h3").textContent="Automatic setup / unverified draft";
+      cards[0].querySelector(".variant-options").textContent=`Deterministic rewrite / ${first.standards.automaticContext?.method.startsWith("bonsai2")?"on-device Bonsai 2 context":"automatic rule-based context"} / unverified`;
+      status.textContent="Automatic setup / draft ready / review required";
+    }
   }
   select(0);
 }
@@ -260,11 +284,19 @@ function runRewrite() {
   } catch (error) { pending = false; fail(error.message); }
 }
 function requestRewrite() {
+  if(modelResult?.text!==source.value)modelResult=null;
+  if($("#profile").value==="auto"&&source.value!==lastModelText){window.clearTimeout(modelTimer);modelTimer=window.setTimeout(tryModelContext,900);}
   invalidate(); window.clearTimeout(timer);
   if (busy) { pending = true; startWorker(); } else runRewrite();
 }
 function schedule() {
-  invalidate(); clearError(); pending = false;
+  if(modelResult?.text!==source.value)modelResult=null;
+  window.clearTimeout(modelTimer);
+  if($("#profile").value==="auto"&&source.value!==lastModelText)modelTimer=window.setTimeout(tryModelContext,900);
+  invalidate(); pending = false;
+  // Editing a field must not erase the only explanation for a failed loader.
+  if(!worker&&!ready&&!$("#retry").hidden){window.clearTimeout(timer);return;}
+  clearError();
   if (busy) startWorker(); // Stop obsolete expensive searches immediately.
   status.textContent = "Text changed; preparing new variations...";
   window.clearTimeout(timer); timer = window.setTimeout(runRewrite, 180);
@@ -278,10 +310,11 @@ function restructureForBoth() {
   updateMode();requestRewrite();
 }
 $("#both-standards").addEventListener("click",restructureForBoth);
+$("#text-type").addEventListener("input",()=>{textTypeOverride=$("#text-type").value!=="auto";});
 source.value = SAMPLE;
 source.addEventListener("input", schedule);
 for (const control of [seed, intensity, $("#synonyms"), $("#arrange"), $("#quotes"), $("#protected")]) control.addEventListener("input", schedule);
-for (const control of [$("#profile"), $("#text-type"), $("#check-only"), $("#require-conformity"), $("#structured-lists"), $("#audience"), $("#purpose"), $("#vocabulary")]) {
+for (const control of [$("#auto-strict"), $("#profile"), $("#text-type"), $("#check-only"), $("#require-conformity"), $("#structured-lists"), $("#audience"), $("#purpose"), $("#vocabulary")]) {
   control.addEventListener("input", () => { updateMode(); schedule(); });
 }
 
@@ -291,12 +324,14 @@ $("#variant").addEventListener("click", () => {
   catch (error) { invalidate(); fail(error.message); }
 });
 $("#reset").addEventListener("click", () => {
+  modelResult=null;lastModelText=null;modelRequest++;bonsai.cancelAnalysis();
   source.value = SAMPLE; seed.value = "1"; intensity.value = "1";
   $("#synonyms").checked = $("#arrange").checked = $("#quotes").checked = true;
   $("#protected").value = ""; $("#profile").value = "variation"; $("#check-only").checked = false; $("#require-conformity").checked = $("#structured-lists").checked = true; updateMode(); requestRewrite();
 });
 $("#clear").addEventListener("click", () => { source.value = ""; requestRewrite(); source.focus(); });
 $("#cancel").addEventListener("click", () => {
+  modelRequest++;bonsai.cancelAnalysis();window.clearTimeout(modelTimer);
   window.clearTimeout(timer); pending = false; invalidate(); startWorker(); status.textContent = "Rewrite cancelled. Your original text is unchanged.";
 });
 $("#retry").addEventListener("click", () => { invalidate(); clearError(); pending = true; startWorker(); });
@@ -380,4 +415,31 @@ $("#coverage-toggle").addEventListener("click",()=>{
   const hidden=$("#coverage-panel").hidden;
   $("#coverage-panel").hidden=!hidden; $("#coverage-toggle").setAttribute("aria-expanded",String(hidden));
 });
+const bonsai=new BonsaiClient({onStatus:state=>{
+  let message=state.message||state.state;
+  if(state.kind==='bytes'&&state.total>0)message+=` (${(state.loaded/1e9).toFixed(2)} / ${(state.total/1e9).toFixed(2)} GB)`;
+  $("#bonsai-status").textContent=message;
+  $("#bonsai-unload").disabled=["idle","failed"].includes(state.state);
+  $("#bonsai-load").disabled=!$("#bonsai-consent").checked||!["idle","failed"].includes(state.state);
+}});
+async function tryModelContext(){
+  if($("#profile").value!=="auto"||!source.value.trim()||source.value.length>MAX||!['ready','analyzing'].includes(bonsai.state))return;
+  const text=source.value,id=++modelRequest;lastModelText=text;
+  try{const result=await bonsai.analyze(text);if(id!==modelRequest||source.value!==text||$("#profile").value!=="auto")return;
+    modelResult={text,proposal:validateProposal(result.proposal,text.replace(/\r\n?/g,"\n")),sampled:result.sampled===true};requestRewrite();
+  }catch(error){if(id===modelRequest&&error.name!=="AbortError")$("#bonsai-status").textContent=`${error.message} The automatic rule-based draft remains available.`;}
+}
+$("#auto-overrides").addEventListener("click",()=>{showAutoOverrides=!showAutoOverrides;$("#auto-overrides").setAttribute("aria-expanded",String(showAutoOverrides));updateMode();});
+$("#bonsai-consent").addEventListener("change",()=>{
+  if(!$("#bonsai-consent").checked&&!['idle','failed'].includes(bonsai.state)){bonsai.unload();clearModelProposal();}
+  $("#bonsai-load").disabled=!$("#bonsai-consent").checked||!["idle","failed"].includes(bonsai.state);
+});
+$("#bonsai-load").addEventListener("click",async()=>{
+  if(!$("#bonsai-consent").checked)return;
+  if(!navigator.gpu){$("#bonsai-status").textContent="This browser has no WebGPU. Automatic rule-based setup still works.";return;}
+  try{await bonsai.load(true);lastModelText=null;await tryModelContext();}catch(error){$("#bonsai-status").textContent=error.message;}
+});
+function clearModelProposal(){modelRequest++;modelResult=null;lastModelText=null;window.clearTimeout(modelTimer);if($("#profile").value==="auto")requestRewrite();}
+$("#bonsai-unload").addEventListener("click",()=>{bonsai.unload();clearModelProposal();});
+$("#bonsai-delete").addEventListener("click",async()=>{clearModelProposal();try{await bonsai.deleteCache();}catch(error){$("#bonsai-status").textContent=error.message;}});
 updateMode(); invalidate(); pending = true; startWorker();

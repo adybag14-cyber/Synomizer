@@ -3,7 +3,7 @@
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 async function loaded(page) {
-  await page.goto('./');
+  await page.goto('./'); await page.locator("#profile").selectOption("variation");
   await expect(page.locator('#status')).toContainText('seed 1');
 }
 async function mode(page, profile) {
@@ -113,7 +113,7 @@ test('coverage documentation distinguishes standards assistance from full compli
   await expect(page.locator('h1')).toHaveText('Clarity, not certification');
   await expect(page.locator('main')).toContainText('not the complete section 8 counting method');
   await expect(page.locator('main')).toContainText('does not prescribe');
-  await expect(page.locator('main')).toContainText('researched, not embedded');
+  await expect(page.locator('main')).toContainText('optional on-device context');
   expect(await page.locator('iframe').count()).toBe(0);
 });
 

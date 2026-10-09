@@ -3,6 +3,7 @@
 #include "synomizer/engine.hpp"
 #include <iostream>
 #include <set>
+#include <stdexcept>
 #include <string>
 using namespace synomizer;
 int main() {
@@ -60,5 +61,27 @@ int main() {
     expect(r.standards->screens[0].sentence_target==20&&r.standards->screens[1].sentence_target==25,"STE and advisory targets distinct");
     expect(r.standards->screens[0].after.long_sentences==1&&r.standards->screens[1].after.long_sentences==0,"distinct length findings for the same text");
   }
+  o.auto_context=true;o.text_type="auto";o.profile="combined";o.check_only=false;
+  r=rewrite("Inspect the valve. Remove the cover. Do not exceed 5 bar.",o);
+  expect(r.standards&&r.standards->automatic_context.has_value(),"automatic context reported");
+  if(r.standards&&r.standards->automatic_context){
+    expect(r.standards->text_type=="procedure","automatic instruction type");
+    expect(r.standards->automatic_context->text_type.origin=="inferred-rules","inference is not a user-confirmed fact");
+    expect(!r.standards->conformity.release_allowed,"automatic setup cannot approve conformity");
+  }
+  o.audience="My readers";
+  r=rewrite("This review compares catalysts and solvents for arylation.",o);
+  expect(r.standards&&r.standards->audience=="My readers","manual reader overrides inferred reader");
+  o.audience.clear();o.purpose.clear();o.text_type="auto";
+  o.auto_proposal.emplace();
+  o.auto_proposal->audience=ContextField{"Maintenance staff","","Inspect the valve"};
+  o.auto_proposal->terms={"valve"};
+  o.auto_proposal->review_hints.push_back({"plain","Clarify the valve location.","the valve"});
+  r=rewrite("Inspect the valve. Remove the cover.",o);
+  expect(r.standards&&r.standards->automatic_context&&r.standards->automatic_context->audience.origin=="inferred-bonsai2","typed model proposal provenance");
+  expect(r.standards&&!r.standards->conformity.release_allowed&&r.standards->vocabulary_entries==0,"model proposal does not approve vocabulary or release");
+  o.auto_proposal->audience->evidence="not present";
+  bool bad_proposal=false;try{(void)rewrite("Inspect the valve.",o);}catch(const std::invalid_argument&){bad_proposal=true;}
+  expect(bad_proposal,"ungrounded typed model proposal rejected");
   return failures?1:0;
 }

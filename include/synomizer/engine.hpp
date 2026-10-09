@@ -58,6 +58,22 @@ struct StandardScreen {
   StandardMetrics before, after;
   std::vector<StandardFinding> findings;
 };
+struct ContextField { std::string value, origin, evidence; };
+struct ContextHint { std::string standard, note, evidence; };
+struct ContextProposal {
+  std::optional<ContextField> audience, purpose, text_type;
+  std::vector<std::string> terms;
+  std::vector<ContextHint> review_hints;
+  bool sampled = false;
+};
+struct AutomaticContext {
+  std::string method = "rules-v1", status = "inferred-not-verified", source_sha256, genre;
+  ContextField audience, purpose, text_type;
+  std::vector<std::string> terms, warnings;
+  std::vector<ContextHint> review_hints;
+  bool sampled = false;
+};
+[[nodiscard]] AutomaticContext infer_context(std::string_view text);
 struct StandardsReport {
   std::string profile, text_type, status = "review-required", audience, purpose;
   std::size_t sentence_target = 25, vocabulary_entries = 0;
@@ -67,6 +83,7 @@ struct StandardsReport {
   std::vector<StandardFinding> findings;
   ConformityAssessment conformity;
   std::vector<StandardScreen> screens;
+  std::optional<AutomaticContext> automatic_context;
 };
 [[nodiscard]] std::vector<VocabularyEntry> parse_vocabulary(std::string_view tsv);
 
@@ -91,6 +108,8 @@ struct Options {
   std::vector<VocabularyEntry> vocabulary = {};
   bool require_conformity = false; // Withhold release when complete assessment is unavailable.
   bool structured_lists = true; // Preserve conjunctions while formatting supported enumerations.
+  bool auto_context = false;
+  std::optional<ContextProposal> auto_proposal = {};
 };
 
 struct Result {

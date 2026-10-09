@@ -18,7 +18,7 @@ self.onmessage = async ({ data }) => {
           synonyms: data.options.synonyms !== false, arrange: data.options.arrange !== false,
           protectQuotes: data.options.protectQuotes !== false, protectedTerms: [...(data.options.protectedTerms || [])],
           ...(standard ? { profile: data.options.profile, textType: data.options.textType ?? "description",
-            checkOnly: data.options.checkOnly ?? false, requireConformity: data.options.requireConformity ?? false, structuredLists: data.options.structuredLists ?? true, audience: data.options.audience ?? "", purpose: data.options.purpose ?? "",
+            autoContext: data.options.autoContext ?? false, ...(data.options.autoProposal ? {autoProposal:data.options.autoProposal,autoSampled:data.options.autoSampled===true} : {}), checkOnly: data.options.checkOnly ?? false, requireConformity: data.options.requireConformity ?? false, structuredLists: data.options.structuredLists ?? true, audience: data.options.audience ?? "", purpose: data.options.purpose ?? "",
             vocabulary: data.options.vocabulary ?? [] } : {}) } })) };
 
     postMessage({ type: "result", id: data.id, batch });

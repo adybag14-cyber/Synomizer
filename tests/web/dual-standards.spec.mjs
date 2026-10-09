@@ -8,7 +8,7 @@ import {loadResources,rewrite} from '../../docs/engine.js';
 const resources=loadResources(...['lexicon.tsv','phrases.txt','rephrases.tsv'].map(n=>readFileSync(new URL(`../../data/${n}`,import.meta.url),'utf8')));
 const hash=s=>createHash('sha256').update(s).digest('hex');
 const source='The process requires control of pressure, temperature or flow. Do not exceed 5 bar.';
-async function loaded(page) {await page.goto('./');await expect(page.locator('#status')).toContainText('seed 1');}
+async function loaded(page) {await page.goto('./'); await page.locator("#profile").selectOption("variation");await expect(page.locator('#status')).toContainText('seed 1');}
 async function settled(page) {await expect(page.locator('#status')).toContainText('review required');await expect(page.locator('#output')).toHaveAttribute('aria-busy','false');}
 async function exportReport(page) {
  const waiting=page.waitForEvent('download');await page.locator('#export-changes').click();const file=await waiting;

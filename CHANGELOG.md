@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.0 - 2026-10-09
+
+- Make paste-only automatic drafting the default: infer provisional reader, purpose, type and source terms without requiring forms; retain explicit user overrides and provenance in native/browser reports. Add native `--auto-context`.
+- Integrate optional consented Bonsai 2 WebGPU context proposals using pinned, hash-checked upstream code and pinned weights, with no runtime/weights vendored. Validate bounded source-grounded data; never convert a model assertion into approval.
+- Add dedicated model-worker cancellation, deadlines, device-loss fallback, newest-request handling and namespaced cache deletion. Rule-based drafting remains available when the model is absent or fails.
+- Distinguish automatic unverified draft export from optional strict release. Preserve manual standards/three-variation paths and the existing no-conformity-certificate limitation.
+
 ## 1.5.1 - 2026-10-09
 
 - Make combined restructuring discoverable: a visible toolbar shortcut and an action on the Restructured card select both ASD-STE100 and ISO 24495-1. Both start from the unchanged original rather than feeding back a generated variant, preserve terminology/reader settings and enable strict export.

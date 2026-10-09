@@ -2,7 +2,7 @@
 
 **Thoughtful variations, not random replacements.** Synomizer is a C++23 command-line tool and library, with a static [GitHub Pages editor](https://adybag14-cyber.github.io/Synomizer/), for varying English prose using a curated lexicon, grammatical inflection and conservative sentence moves.
 
-The same text, seed, options **and engine/word-list version** produce the same output. It is useful for passages of about 100 words, and processes longer text sentence by sentence. It does not call a language model or a rewriting service.
+The same text, seed, options **and engine/word-list version** produce the same output. This describes the deterministic engine. Optional model proposals can vary; exports retain the accepted proposal and its inferred provenance for replay. It is useful for passages of about 100 words, and processes longer text sentence by sentence. The deterministic rewrite does not call a language model or a rewriting service; the optional browser context stage can use Bonsai 2 locally.
 
 **Review the result.** These are mechanical rules, not a semantic parser. No intensity level guarantees perfect grammar, identical meaning or a suitable register for every context. Technical, legal, medical, quoted and publication-ready writing needs particular care. Leaving a sentence unchanged is preferable to forcing an unsuitable variation.
 
@@ -10,7 +10,7 @@ The same text, seed, options **and engine/word-list version** produce the same o
 
 [Open Synomizer](https://adybag14-cyber.github.io/Synomizer/).
 
-Paste or import a UTF-8 `.txt` or `.md` file and choose **Create 3 variations**. Your original stays above up to three complete, distinct results. They appear side by side on desktop and stack on a phone. Each card has its own copy, text download, JSON change-log download, seed/profile and change counts. **Use this** selects the result used by the shared change ledger and selected-result export controls. Selection never overwrites the original.
+The page starts in **Automatic: paste and rewrite**. Paste or import text to get one standards-oriented draft with inferred setup. No reader, purpose or vocabulary form is required. Select **Three variations** to use the original comparison workflow, then choose **Create 3 variations**. Your original stays above up to three complete, distinct results. They appear side by side on desktop and stack on a phone. Each card has its own copy, text download, JSON change-log download, seed/profile and change counts. **Use this** selects the result used by the shared change ledger and selected-result export controls. Selection never overwrites the original.
 
 **New set** advances the base seed and always rewrites the original, not a previous result. **Download all variations** exports the original plus all complete results, their reproduction options, change records and selected index. Different seeds can still find some of the same wording.
 
@@ -20,13 +20,35 @@ Processing happens in a cancellable Web Worker. The browser accepts up to **200,
 
 ### Privacy
 
-Text is processed locally in the browser. There are no accounts, analytics, external fonts or rewriting API calls. Text and settings are not saved by the app after a reload. The page and its word lists are initially fetched from GitHub Pages, and normal hosting access logs still apply. Importing a text file does not upload it. Selected-result JSON contains the result, profile, exact options and change records. All-variations JSON also includes the original; share it only when you intend to share that original.
+Text is processed locally in the browser. There are no accounts, analytics, external fonts or server-side rewriting API calls. Optional model/runtime downloads occur only after the user grants permission. Text and settings are not saved by the app after a reload. Optional Bonsai model weights may be cached separately after explicit download permission; no prompt snapshots are persisted. The page and its word lists are initially fetched from GitHub Pages, and normal hosting access logs still apply. Importing a text file does not upload it. Selected-result JSON contains the result, profile, exact options and change records. All-variations JSON also includes the original; share it only when you intend to share that original.
 
 The browser implementation is JavaScript, **not a native C++ executable or WebAssembly build**. It mirrors the C++ reference rules and reads the same versioned data files. Cross-engine tests compare both rewritten text and complete change records, including full-width 64-bit seeds.
 
-## Standards conversion and guarded release (1.5.1)
+## Automatic setup and optional Bonsai 2 (1.6.0)
 
-Choose **ASD-STE100 authoring aid**, **ISO 24495-1 plain-language aid**, or **Both: ASD-STE100 + ISO 24495-1**. The standards path returns one deterministic draft and a structured report, not three synonymous alternatives. No transformer, language model, WebGPU inference or external rewriting service is used.
+Paste English text into the original field. The automatic mode infers a provisional reader group, purpose and procedure/description type, identifies source-literal technical terms to protect, and produces a deterministic draft for the combined standards mode. Settings are shown as **inferred**, not silently presented as confirmed facts. The C++ equivalent is `synomizer --auto-context --json input.txt`; explicit `--audience`, `--purpose`, `--text-type` and `--profile` override inferred/default choices.
+
+**No official vocabulary is invented.** Extracted terms are lexical protections, not approved STE dictionary entries. The model-free fallback distinguishes supported research, instructional and correspondence cues; unfamiliar material gets explicitly provisional generic context. Manual settings remain available under **Adjust optional settings** and take precedence over inference. The original text is never replaced by a generated variation.
+
+Automatic mode permits copying/downloading an **unverified draft** by default. Enable **Require verified export** to use the fail-closed release gate. The dedicated manual standards profiles retain their strict export default. Neither automatically filled fields nor model suggestions constitute reader evaluation, factual checking or conformity approval.
+
+### Optional on-device Bonsai 2
+
+Open **Optional on-device intelligence: Bonsai 2 / WebGPU**, grant the stated download permission, then select **Enable Bonsai 2 (~5.95 GB)**. The initial load retrieves a pinned community WebGPU runtime and the pinned `PTQ1_0` weight file (5,946,648,928 bytes) from Hugging Face. It requires a compatible GPU/browser and additional runtime memory; a 6 GB device is not guaranteed sufficient. The application downloads nothing from the model host before opt-in, and no account/token is needed for these public files.
+
+After loading, later text changes are analyzed automatically. Bonsai proposes readers, purpose, text type, source terms and review suggestions. The deterministic engine then processes the original using that proposed context. It does not blindly insert a model paraphrase or an approval into the result. A rejected model response gets at most one bounded repair attempt under the same overall deadline; invalid data still falls back to rules. Each proposed field needs literal source evidence; unfamiliar keys, fabricated terms, unsupported text types and approval flags are rejected. Manual overrides still win. Pasted instructions are treated as untrusted document content, not tool commands.
+
+Model input is bounded to a 6,000-UTF-8-byte excerpt and 512 generated tokens within an 8,192-token runtime window. Long documents explicitly report model sampling; the rule engine still processes the complete text up to the browser's 200,000-character limit. Sampling and literal evidence do not prove that an inference is correct. Model errors, invalid JSON, missing GPU support and timeouts leave the immediate rule-based draft available.
+
+The model runs in a dedicated worker with cancellation, newest-request guards, device-loss handling, a load deadline and an inference deadline. **Stop / unload** releases the worker and returns to rules. **Delete cached model** removes only Synomizer's namespaced model cache; another tab using the cache may need to be closed. Text/context are not written into the model cache, and runtime prompt-prefix persistence is disabled. Model weights can remain cached after a reload; model activation is opt-in for each page session.
+
+The remote runtime is consumed from an immutable upstream revision after SHA-256 verification of the complete source and extracted model module. No upstream kernel source or model weights are redistributed in this repository. The extracted module excludes the demo UI and its optional Markdown/KaTeX imports. Model fetches are limited to GET/HEAD requests to the pinned weight URL; document uploads are not permitted. Standard hosting/CDN download logs still apply. Runtime/model provenance is recorded in `docs/bonsai-config.js`.
+
+The pinned runtime's system-prefix optimization is disabled because its template requires a user turn even when rendering a cached prefix. System and user messages remain separate, and the model resets between documents. This local adapter does not modify the downloaded module or bypass checksum validation.
+
+## Standards conversion and guarded release (1.6.0)
+
+Choose **ASD-STE100 authoring aid**, **ISO 24495-1 plain-language aid**, or **Both: ASD-STE100 + ISO 24495-1**. The standards path returns one deterministic draft and a structured report, not three synonymous alternatives. The deterministic rewrite itself uses no transformer or server-side rewriting service. The optional Bonsai context stage is described above.
 
 **This release does not guarantee conformity for arbitrary text.** It distinguishes generating a draft from releasing text as conformant. Rule coverage, short sentences, a matching glossary and a matching hash do not establish correct meaning, approved word senses or reader usability.
 
@@ -68,7 +90,7 @@ The CLI enables the equivalent opt-in gate with `--require-conformity`. A blocke
 ./build/synomizer --profile plain --check-only input.txt
 ```
 
-**There is deliberately no automatic approval path in 1.5.1.** The report always identifies conformity as unverified. It includes all 53 ASD-STE100 Issue 9 rule identifiers where STE is selected, plus four ISO principle-level review entries where plain language is selected. The ISO entries are not a complete enumeration of the standard's detailed guidelines. Every entry states `not-verified` or requests attention; an unimplemented check cannot silently pass. Hashes bind the normalized source and draft bytes, not a signature, identity, approval or semantic proof.
+**There is deliberately no automatic approval path in 1.6.0.** The report always identifies conformity as unverified. It includes all 53 ASD-STE100 Issue 9 rule identifiers where STE is selected, plus four ISO principle-level review entries where plain language is selected. The ISO entries are not a complete enumeration of the standard's detailed guidelines. Every entry states `not-verified` or requests attention; an unimplemented check cannot silently pass. Hashes bind the normalized source and draft bytes, not a signature, identity, approval or semantic proof.
 
 ### Authoring context and terminology
 
@@ -80,9 +102,20 @@ Diagnostic JSON includes source/draft digests, exact browser settings, supplied 
 
 See [coverage and source notes](docs/standards.html). Native and browser implementations are tested for exact text, change and report parity, including write-protection on failed CLI release.
 
-### Optional Bonsai 2 / WebGPU investigation
+### Real model acceptance test (optional)
 
-Bonsai 2 remains a transformer model, not a transformer-free alternative. The publisher's PTQ1_0 language weights are approximately 5.95 GB; a 6 GB device is not thereby guaranteed sufficient runtime memory. A community WebGPU demonstration exists. This release **does not embed or download Bonsai**, nor send text to that demo. The coverage page links to the publisher and external demo. A future integration would need explicit download consent, compatible pinned runtime/weights, memory/context limits, cancellation, device-loss handling, cache deletion and independent output review.
+The normal test suite uses controlled worker fixtures for cancellation, consent and malicious/invalid model replies; it does not download a 6 GB model during CI. Real hardware acceptance is separate and explicitly opt-in:
+
+```sh
+npm run build:site
+npm run test:bonsai:real -- --allow-model-download --channel msedge
+```
+
+This opens its own test browser, uses the real page controls, runs research and procedural examples on the GPU, verifies inferred provenance and unverified release status, checks that requests do not upload document bodies, and exercises unload/cache deletion. It requires installed Playwright/browser support, enough memory and the stated model download. Startup failures are reported as failures, not skipped passes. Use `--url` with the deployed editor URL to verify a published build. Evidence is written under ignored `artifacts/bonsai-real/`.
+
+### Model and runtime provenance
+
+Bonsai 2 is a transformer-based model. The automatic fallback and C++ executable require no transformer; the browser's optional Bonsai path is explicitly model-assisted. Sources: [Prism ML model](https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf) and [WebML community WebGPU runtime](https://huggingface.co/spaces/webml-community/ternary-bonsai-2-webgpu-kernels). The runtime revision and both verified code hashes, weight revision/file and separate cache namespace are pinned in source. This is not an endorsement or standards certificate.
 
 ## Build the C++23 tool
 

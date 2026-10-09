@@ -7,7 +7,7 @@ const hash=s=>createHash('sha256').update(s).digest('hex');
 const source='The process requires control of temperature, pressure or flow.';
 const expected='The process requires control of the following:\n- temperature,\n- pressure,\n- or flow.\n\n';
 async function ready(page,profile='combined') {
-  await page.goto('./');await expect(page.locator('#status')).toContainText('seed 1');
+  await page.goto('./'); await page.locator("#profile").selectOption("variation");await expect(page.locator('#status')).toContainText('seed 1');
   await page.locator('#profile').selectOption(profile);
 }
 async function convert(page,text=source) {

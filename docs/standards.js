@@ -1,3 +1,4 @@
+import {resolveContext,termOccurrences} from "./auto-context.js";
 import { standardStructure } from "./standard-structure.js";
 import { assessConformity, sourceAnchors, sha256Text } from "./conformity.js";
 // Copyright 2026 adybag14-cyber
@@ -54,6 +55,10 @@ export function rewriteStandard(input, options, resources, h) {
     audience: options.audience ?? "", purpose: options.purpose ?? "", vocabulary: options.vocabulary ?? [],
     requireConformity: options.requireConformity ?? false, structuredLists: options.structuredLists ?? true,
     synonyms: options.synonyms !== false, arrange: options.arrange !== false, protectQuotes: options.protectQuotes !== false };
+  let automatic=null;
+  if(options.autoContext===true){const resolved=resolveContext(input.replace(/\r\n?/g,"\n"),o);automatic=resolved.context;Object.assign(o,resolved.options);}
+  else if(options.autoProposal)throw new Error("Model context requires automatic setup");
+  if(options.autoContext!==undefined&&typeof options.autoContext!=="boolean")throw new TypeError("autoContext must be boolean");
   validate(o);
   const { lower } = h;
   const tokenize = text => h.splitPieces(text).flatMap(p => p.sentence ? p.tokens : [{ text: p.text, word: false, frozen: false, replaced: false }]);
@@ -314,22 +319,26 @@ export function rewriteStandard(input, options, resources, h) {
     let tokens = piece.tokens.map(t => ({ ...t }));
     const vocabularyLocked=prepare(tokens);
     const locked = h.freezeTerms(tokens, o.protectedTerms || []) || vocabularyLocked;
+    if(automatic)h.freezeTerms(tokens,automatic.terms);
     if (!o.checkOnly) {
       if (o.arrange && !locked) {
         const arranged = activePast(tokens) || splitIndependent(tokens) || standardStructure(tokens, resources, h, o.structuredLists);
         if (arranged) { tokens = arranged.tokens; result.changes.push(arranged.change); prepare(tokens); }
       }
+      if(automatic)h.freezeTerms(tokens,automatic.terms);
       if (o.synonyms) tokens = simplify(tokens, result.changes);
     }
     result.text += concat(tokens);
     for (const token of tokens) result.parts.push({ text: token.text, changed: token.replaced });
   }
-  const rolledBack=JSON.stringify(sourceAnchors(source))!==JSON.stringify(sourceAnchors(result.text));
+  const termLost=automatic&&automatic.terms.some(term=>termOccurrences(result.text,term)<termOccurrences(source,term));
+  const rolledBack=termLost||JSON.stringify(sourceAnchors(source))!==JSON.stringify(sourceAnchors(result.text));
   if(rolledBack){result.text=source;result.changes=[];result.parts=source?[{text:source,changed:false}]:[];}
   const report = { profile: o.profile, textType: o.textType, status: "review-required", audience: o.audience, purpose: o.purpose,
     sentenceTarget: STE(o) && o.textType === "procedure" ? 20 : 25, vocabularyEntries: o.vocabulary.length,
     estimatedCounts: true, semanticEquivalenceVerified: false, findings: [] };
   const add = (code, message) => report.findings.push({ code, severity: "review", message, evidence: "", sentence: 0 });
+  if(automatic){report.automaticContext=automatic;add("AUTO-CONTEXT","Reader, purpose, text type and source terms were proposed automatically. These are not confirmed reader needs, approved vocabulary or evidence that a standard is satisfied.");}
   if(rolledBack) add("CONVERSION-ROLLBACK","A numeric or logical marker changed. All draft edits were rolled back; review the original. Marker matching alone never proves equivalent meaning.");
   add("AUTHOR-REVIEW", "No complete conformance or semantic-equivalence assessment was performed. Check facts, actors, quantities, conditions, negation and obligations against the source.");
   add("COUNT-SCOPE", "Word counts are screening estimates, not the full ASD-STE100 section 8 counting method. Review names, labels, quotations, measurements, parentheses and lists. ISO 24495-1 does not impose this application's 25-word heuristic.");

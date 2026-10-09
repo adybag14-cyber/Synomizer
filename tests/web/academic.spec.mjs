@@ -11,7 +11,7 @@ async function batch(page) {
  const file=await waiting;return JSON.parse(await readFile(await file.path(),'utf8'));
 }
 async function load(page) {
- await page.goto('./');await expect(page.locator('#status')).toContainText('seed 1');
+ await page.goto('./'); await page.locator("#profile").selectOption("variation");await expect(page.locator('#status')).toContainText('seed 1');
  await page.locator('#source').fill(text);await page.locator('#rewrite').click();
  await expect(page.locator('#export-all')).toBeEnabled();
  await expect(page.locator('#output')).toHaveAttribute('aria-busy','false');
@@ -19,7 +19,7 @@ async function load(page) {
 test('academic prose yields actual phrase edits and four structural changes, all exportable',async({page},info)=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await load(page);const report=await batch(page);expect(report.variants).toHaveLength(3);
- expect(report.version).toBe('1.5.1');expect(report.original).toBe(text);
+ expect(report.version).toBe('1.6.0');expect(report.original).toBe(text);
  const index=report.variants.findIndex(v=>v.style==='recast');expect(index).toBeGreaterThanOrEqual(0);
  const recast=report.variants[index];
  expect(recast.changes.filter(c=>c.kind==='arrangement').length).toBeGreaterThanOrEqual(4);
